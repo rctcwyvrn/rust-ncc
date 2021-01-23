@@ -5,7 +5,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub mod hardio;
 #[cfg(feature = "validate")]
 use crate::cell::confirm_volume_exclusion;
 use crate::cell::states::CoreState;
@@ -21,12 +20,11 @@ use crate::parameters::{
 use crate::NVERTS;
 //use rand_core::SeedableRng;
 use crate::utils::pcg32::Pcg32;
-use crate::world::hardio::AsyncWriter;
 use rand::seq::SliceRandom;
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
-use std::path::PathBuf;
+
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cells {
@@ -55,7 +53,7 @@ impl Cells {
             let contact_data =
                 interaction_generator.get_contact_data(ci);
 
-            let new_cell_state = cell_state.simulate_rkdp5(
+            let new_cell_state = cell_state.simulate_euler(
                 tstep,
                 &self.interactions[ci],
                 contact_data,
@@ -119,7 +117,6 @@ pub struct World {
     tstep: u32,
     world_params: WorldParameters,
     group_params: Vec<Parameters>,
-    history_writer: Option<AsyncWriter>,
     cells: Cells,
     interaction_generator: InteractionGenerator,
     pub rng: Pcg32,
@@ -142,9 +139,7 @@ fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
 impl World {
     pub fn new(
         experiment: Experiment,
-        out_dir: Option<PathBuf>,
         snap_freq: u32,
-        max_on_ram: usize,
     ) -> World {
         // Unpack relevant info from `Experiment` data structure.
         let Experiment {
@@ -233,26 +228,7 @@ impl World {
         }
         let cells = Cells {
             states: cell_states,
-            interactions: cell_interactions.clone(),
-        };
-        let history_writer = if let Some(out_dir) = out_dir {
-            Some(Self::init_history_writer(
-                out_dir,
-                experiment.file_name,
-                WorldInfo {
-                    snap_freq,
-                    char_quants,
-                    world_params: world_params.clone(),
-                    cell_params: cells
-                        .states
-                        .iter()
-                        .map(|s| group_params[s.group_ix].clone())
-                        .collect::<Vec<Parameters>>(),
-                },
-                max_on_ram,
-            ))
-        } else {
-            None
+            interactions: cell_interactions,
         };
         World {
             tstep: 0,
@@ -263,7 +239,6 @@ impl World {
             interaction_generator,
             rng,
             snap_freq,
-            history_writer,
         }
     }
 
@@ -275,7 +250,7 @@ impl World {
         }
     }
 
-    pub fn simulate(&mut self, final_tpoint: f32, save_cbor: bool) {
+    pub fn simulate(&mut self, final_tpoint: f32) {
         let num_tsteps =
             (final_tpoint / self.char_quants.time()).ceil() as u32;
         while self.tstep < num_tsteps {
@@ -288,25 +263,11 @@ impl World {
                     &self.group_params,
                     &mut self.interaction_generator,
                 )
-                .unwrap_or_else(|e| {
-                    self.finish_saving_history(save_cbor);
-                    panic!("tstep: {}\n{}", self.tstep, e);
-                });
+                .unwrap();
 
             self.cells = new_cells;
             self.tstep += 1;
-            if self.tstep % self.snap_freq == 0
-                && self.history_writer.is_some()
-            {
-                let snapshot = self.take_snapshot();
-                if let Some(hw) = self.history_writer.as_mut() {
-                    if self.tstep % self.snap_freq == 0 {
-                        hw.push(snapshot);
-                    }
-                }
-            }
         }
-        self.finish_saving_history(save_cbor);
     }
 
     pub fn history_info(&self) -> WorldInfo {
@@ -320,27 +281,6 @@ impl World {
                 .iter()
                 .map(|s| self.group_params[s.group_ix].clone())
                 .collect::<Vec<Parameters>>(),
-        }
-    }
-
-    pub fn init_history_writer(
-        output_dir: PathBuf,
-        file_name: String,
-        history_info: WorldInfo,
-        max_capacity: usize,
-    ) -> AsyncWriter {
-        AsyncWriter::new(
-            output_dir,
-            file_name,
-            max_capacity,
-            true,
-            history_info,
-        )
-    }
-
-    pub fn finish_saving_history(&mut self, save_cbor: bool) {
-        if let Some(hw) = self.history_writer.take() {
-            hw.finish(save_cbor);
         }
     }
 }

@@ -6,12 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod cil_test;
-pub mod four_cells;
-pub mod n_cells;
-pub mod pair;
-pub mod separated_pair;
-//pub mod single;
+pub mod model_compare;
 
 use crate::cell::chemistry::{
     DistributionScheme, DistributionType, RgtpDistribution,

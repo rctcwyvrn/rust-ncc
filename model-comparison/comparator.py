@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import cbor2
 import parse
@@ -16,14 +15,16 @@ stages = ["find", "ci", "vertex_coords", "rac_acts",
 with open(test_file, 'r') as rf:
     lines = rf.readlines()
 
+passed_tsteps = 0
 py_dat = [[], []]
 step_dat = dict()
+processed_ci = []
 ci = None
 stage = 0
 for line in lines:
     line = line.strip()
     stage_string = stages[stage]
-    if stage_string == "find" and delimiter in line:
+    if stage_string == "find" and delimiter in line and passed_tsteps % 10 == 0:
         r = delimiter in line
         stage = (stage + 1) % len(stages)
         continue
@@ -31,6 +32,7 @@ for line in lines:
         r = stage_string in line
         dat_string = parse.parse("ci: {cell_index}", line).named["cell_index"]
         ci = eval(dat_string)
+        processed_ci.append(ci)
         step_dat[stage_string] = ci
         stage = (stage + 1) % len(stages)
         continue
@@ -48,6 +50,8 @@ for line in lines:
         step_dat[stage_string] = np.array(dat_string)
         stage = (stage + 1) % len(stages)
         continue
+
+del lines
 
 world_history = None
 snapshots = []
