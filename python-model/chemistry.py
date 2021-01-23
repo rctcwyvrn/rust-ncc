@@ -5,8 +5,8 @@ Created on Tue May 12 13:27:54 2015
 """
 
 
-import numpy as np
 import numba as nb
+import numpy as np
 
 
 # -----------------------------------------------------------------

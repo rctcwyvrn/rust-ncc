@@ -5,8 +5,8 @@ Created on Sun Aug 07 16:00:16 2016
 @author: Brian Merchant
 """
 
+import exec_utils as eu
 import numpy as np
-import general.exec_utils as eu
 
 global_randomization_scheme_dict = {"m": "kgtp_rac_multipliers", "w": "wipeout"}
 
@@ -132,8 +132,6 @@ def stringify_randomization_info(parameter_dict):
 # ===========================================================================
 
 def rust_comparison_test(
-        date_str,
-        experiment_number,
         sub_experiment_number,
         parameter_dict,
         num_cells_responsive_to_chemoattractant=-1,
@@ -180,10 +178,6 @@ def rust_comparison_test(
         experiment_name += "-UIP"
     if not (num_cells_responsive_to_chemoattractant >= num_cells or num_cells_responsive_to_chemoattractant < 0):
         experiment_name += "-NRESP={}".format(num_cells_responsive_to_chemoattractant)
-
-    experiment_dir = eu.get_template_experiment_directory_path(
-        base_output_dir, date_str, experiment_number, experiment_name
-    )
 
     total_time = total_time_in_hours * 3600
     num_timesteps = int(total_time / timestep_length)
@@ -287,7 +281,6 @@ def rust_comparison_test(
             cell_dependent_coa_signal_strengths.append(signal_strength)
 
     eu.run_template_experiments(
-        experiment_dir,
         environment_wide_variable_defns,
         user_cell_group_defns_per_subexperiment,
         num_experiment_repeats=num_experiment_repeats,

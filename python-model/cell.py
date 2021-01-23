@@ -1,12 +1,12 @@
-import general.utilities as gu
+import utilities as utils
 import numba as nb
 import numpy as np
 
-from . import chemistry
-from . import dynamics
-from . import geometry
-from . import mechanics
-from . import parameterorg
+import chemistry
+import dynamics
+import geometry
+import mechanics
+import parameterorg
 
 """
 Cell.
@@ -59,12 +59,12 @@ def calculate_biased_distrib_factors(
 
     if bias_type == "random":
         biased_distrib_factors = (
-            bias_strength
-            * gu.calculate_normalized_randomization_factors(num_biased_nodes)
+                bias_strength
+                * utils.calculate_normalized_randomization_factors(num_biased_nodes)
         )
         unbiased_distrib_factors = (
             1 - bias_strength
-        ) * gu.calculate_normalized_randomization_factors(num_nodes - num_biased_nodes)
+        ) * utils.calculate_normalized_randomization_factors(num_nodes - num_biased_nodes)
     elif bias_type == "uniform":
         biased_distrib_factors = (
             bias_strength
@@ -467,10 +467,10 @@ class Cell:
 
         rac_membrane_actives = self.system_history[
             access_index, :, parameterorg.rac_membrane_active_index
-        ]
+                               ]
         rho_membrane_actives = self.system_history[
             access_index, :, parameterorg.rho_membrane_active_index
-        ]
+                               ]
 
         coa_signals = np.zeros(self.num_nodes, dtype=np.float64)
         self.system_history[
@@ -628,7 +628,7 @@ class Cell:
         self.system_history[
             access_index,
             :,
-            parameterorg.interaction_factors_intercellular_contact_per_celltype_index,
+        parameterorg.interaction_factors_intercellular_contact_per_celltype_index,
         ] = intercellular_contact_factors
 
         self.curr_node_coords = node_coords
@@ -691,8 +691,8 @@ class Cell:
 
                         if distrib_type == "unbiased random":
                             rgtpase_distrib = (
-                                frac_factor
-                                * gu.calculate_normalized_randomization_factors(
+                                    frac_factor
+                                    * utils.calculate_normalized_randomization_factors(
                                     self.num_nodes
                                 )
                             )
@@ -710,8 +710,8 @@ class Cell:
                                 )
                             elif rgtpase_label == "rho_":
                                 rgtpase_distrib = (
-                                    frac_factor
-                                    * gu.calculate_normalized_randomization_factors(
+                                        frac_factor
+                                        * utils.calculate_normalized_randomization_factors(
                                         self.num_nodes
                                     )
                                 )
@@ -868,20 +868,20 @@ class Cell:
         self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.randomization_rac_kgtp_multipliers_index,
+        parameterorg.randomization_rac_kgtp_multipliers_index,
         ] = self.randomization_rac_kgtp_multipliers
 
         # ==================================
         rac_membrane_actives = self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.rac_membrane_active_index,
-        ]
+                               parameterorg.rac_membrane_active_index,
+                               ]
         rho_membrane_actives = self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.rho_membrane_active_index,
-        ]
+                               parameterorg.rho_membrane_active_index,
+                               ]
         random_order_cell_indices = np.arange(num_cells)
 
         coa_signals = chemistry.calculate_coa_signals(
@@ -907,22 +907,22 @@ class Cell:
             1
             - np.sum(rac_membrane_actives)
             - np.sum(
-                self.system_history[
+            self.system_history[
                     next_tstep_system_history_access_index,
                     :,
-                    parameterorg.rac_membrane_inactive_index,
-                ]
+            parameterorg.rac_membrane_inactive_index,
+            ]
             )
         )
         rho_cytosolic_gdi_bound = (
             1
             - np.sum(rho_membrane_actives)
             - np.sum(
-                self.system_history[
+            self.system_history[
                     next_tstep_system_history_access_index,
                     :,
-                    parameterorg.rho_membrane_inactive_index,
-                ]
+            parameterorg.rho_membrane_inactive_index,
+            ]
             )
         )
 
@@ -932,12 +932,12 @@ class Cell:
         self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.rac_cytosolic_gdi_bound_index,
+        parameterorg.rac_cytosolic_gdi_bound_index,
         ] = (rac_cytosolic_gdi_bound * insertion_array)
         self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.rho_cytosolic_gdi_bound_index,
+        parameterorg.rho_cytosolic_gdi_bound_index,
         ] = (rho_cytosolic_gdi_bound * insertion_array)
 
         F, EFplus, EFminus, F_rgtpase, F_cytoplasmic, local_strains, unit_inside_pointing_vecs = mechanics.calculate_forces(
@@ -983,7 +983,7 @@ class Cell:
         self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.randomization_rac_kgtp_multipliers_index,
+        parameterorg.randomization_rac_kgtp_multipliers_index,
         ] = self.randomization_rac_kgtp_multipliers
 
         kgtp_rac_per_node = chemistry.calculate_kgtp_rac(
@@ -1081,7 +1081,7 @@ class Cell:
         self.system_history[
             next_tstep_system_history_access_index,
             :,
-            parameterorg.interaction_factors_intercellular_contact_per_celltype_index,
+        parameterorg.interaction_factors_intercellular_contact_per_celltype_index,
         ] = intercellular_contact_factors
 
         self.curr_tpoint = new_tpoint
@@ -1111,7 +1111,7 @@ class Cell:
 
         transduced_coa_signals = self.system_history[
             access_index, :, parameterorg.coa_signal_index
-        ]
+                                 ]
 
         return (
             this_cell_index,

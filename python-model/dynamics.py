@@ -6,14 +6,15 @@ Created on Tue May 12 17:22:43 2015
 """
 
 
-import numpy as np
+import writer as fw
+import utilities as general_utilities
 import numba as nb
-from . import chemistry
-from . import geometry
-from . import mechanics
-import general.utilities as general_utilities
-import general.file_write as file_write
-import os
+import numpy as np
+
+import chemistry
+import geometry
+import mechanics
+
 
 # ----------------------------------------------------------------------------------------
 def pack_state_array(
@@ -377,23 +378,23 @@ def cell_dynamics(
     #                 success_condition_stay_in,
     #             )
 
-    with open(write_file_path, 'a') as f:
-        f.write("++++++++++++++++++++++++++++++\n")
-        f.write("ci: {}\n".format(this_cell_index))
-        f.write("vertex_coords: {}\n".format([list(x) for x in node_coords]))
-        f.write("rac_acts: {}\n".format(list(rac_membrane_actives)))
-        f.write("rac_inacts: {}\n".format(list(rac_membrane_inactives)))
-        f.write("rho_acts: {}\n".format(list(rho_membrane_actives)))
-        f.write("rho_inacts: {}\n".format(list(rho_membrane_inactives)))
-        f.write("tot_forces: {}\n".format([list([x, y]) for x, y in zip(F_x, F_y)]))
-        f.write("rgtp_forces: {}\n".format([list(x) for x in F_rgtpase]))
-        f.write("edge_forces: {}\n".format([list(x) for x in EFplus]))
-        f.write("cyto_forces: {}\n".format([list(x) for x in F_cytoplasmic]))
-        f.write("kgtps_rac: {}\n".format(list(kgtps_rac)))
-        f.write("kdgtps_rac: {}\n".format(list(kdgtps_rac)))
-        f.write("kgtps_rho: {}\n".format(list(kgtps_rho)))
-        f.write("kdgtps_rho: {}\n".format(list(kdgtps_rho)))
-        f.write("++++++++++++++++++++++++++++++\n")
+    fw.write(["++++++++++++++++++++++++++++++",
+              "ci: {}".format(this_cell_index),
+              "vertex_coords: {}".format([list(x) for x in node_coords]),
+              "rac_acts: {}".format(list(rac_membrane_actives)),
+              "rac_inacts: {}".format(list(rac_membrane_inactives)),
+              "rho_acts: {}".format(list(rho_membrane_actives)),
+              "rho_inacts: {}".format(list(rho_membrane_inactives)),
+              "tot_forces: {}".format([list([x, y]) for x, y in zip(F_x, F_y)]),
+              "rgtp_forces: {}".format([list(x) for x in F_rgtpase]),
+              "edge_forces: {}".format([list(x) for x in EFplus]),
+              "cyto_forces: {}".format([list(x) for x in F_cytoplasmic]),
+              "kgtps_rac: {}".format(list(kgtps_rac)),
+              "kdgtps_rac: {}".format(list(kdgtps_rac)),
+              "kgtps_rho: {}".format(list(kgtps_rho)),
+              "kdgtps_rho: {}".format(list(kdgtps_rho)),
+              "++++++++++++++++++++++++++++++",
+              ])
 
     for ni in range(num_nodes):
         new_coord = new_node_coords[ni]

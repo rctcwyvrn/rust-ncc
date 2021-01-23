@@ -5,10 +5,12 @@ Created on Mon May 11 14:22:06 2015
 @author: Brian
 """
 
-import numpy as np
 import math
-import numba as nb
 import threading
+
+import numba as nb
+import numpy as np
+
 
 # ----------------------------------------------------------------
 

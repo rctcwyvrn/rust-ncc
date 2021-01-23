@@ -25,6 +25,8 @@ use crate::utils::{circ_ix_minus, circ_ix_plus};
 use crate::NVERTS;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
+use std::fs::File;
+use std::io::Write;
 
 /// Cell state structure.
 #[derive(
@@ -186,6 +188,7 @@ impl Cell {
         world_parameters: &WorldParameters,
         parameters: &Parameters,
         rng: &mut Pcg32,
+        out_file: &mut File,
     ) -> Result<Cell, String> {
         let mut state = self.core;
         let nsteps: u32 = 10;
@@ -203,6 +206,165 @@ impl Cell {
                 parameters,
             );
             state = state + dt * delta;
+            let geom_state = state.calc_geom_state();
+            let mech_state =
+                state.calc_mech_state(&geom_state, parameters);
+            let chem_state = state.calc_chem_state(
+                &geom_state,
+                &mech_state,
+                &self.rac_rand,
+                &interactions,
+                parameters,
+            );
+
+            writeln!(out_file, "++++++++++++++++++++++++++++++")
+                .unwrap();
+            writeln!(out_file, "ci: {}", self.ix).unwrap();
+            writeln!(
+                out_file,
+                "vertex_coords: [{}]",
+                state
+                    .poly
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rac_acts: [{}]",
+                state
+                    .rac_acts
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rac_inacts: [{}]",
+                state
+                    .rac_inacts
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rho_acts: [{}]",
+                state
+                    .rho_acts
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rho_inacts: [{}]",
+                state
+                    .rho_inacts
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "tot_forces: [{}]",
+                mech_state
+                    .sum_forces
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rgtp_forces: [{}]",
+                mech_state
+                    .rgtp_forces
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "edge_forces: [{}]",
+                mech_state
+                    .edge_forces
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "cyto_forces: [{}]",
+                mech_state
+                    .cyto_forces
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "kgtps_rac: [{}]",
+                chem_state
+                    .kgtps_rac
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "kdgtps_rac: [{}]",
+                chem_state
+                    .kdgtps_rac
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "kgtps_rho: [{}]",
+                chem_state
+                    .kgtps_rho
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "kdgtps_rho: [{}]",
+                chem_state
+                    .kdgtps_rho
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(out_file, "++++++++++++++++++++++++++++++")
+                .unwrap();
         }
         let geom_state = state.calc_geom_state();
         let mech_state =

@@ -17,14 +17,15 @@ use crate::math::v2d::V2D;
 use crate::parameters::{
     CharQuantities, Parameters, WorldParameters,
 };
-use crate::NVERTS;
-//use rand_core::SeedableRng;
 use crate::utils::pcg32::Pcg32;
+use crate::NVERTS;
 use rand::seq::SliceRandom;
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
-
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cells {
@@ -40,6 +41,7 @@ impl Cells {
         world_parameters: &WorldParameters,
         group_parameters: &[Parameters],
         interaction_generator: &mut InteractionGenerator,
+        out_file: &mut File,
     ) -> Result<Cells, String> {
         let mut new_cell_states =
             vec![self.states[0]; self.states.len()];
@@ -53,6 +55,11 @@ impl Cells {
             let contact_data =
                 interaction_generator.get_contact_data(ci);
 
+            writeln!(
+                out_file,
+                "======================================"
+            )
+            .unwrap();
             let new_cell_state = cell_state.simulate_euler(
                 tstep,
                 &self.interactions[ci],
@@ -60,7 +67,13 @@ impl Cells {
                 world_parameters,
                 &group_parameters[cell_state.group_ix],
                 rng,
+                out_file,
             )?;
+            writeln!(
+                out_file,
+                "======================================"
+            )
+            .unwrap();
 
             interaction_generator
                 .update(ci, &new_cell_state.core.poly);
@@ -120,7 +133,7 @@ pub struct World {
     cells: Cells,
     interaction_generator: InteractionGenerator,
     pub rng: Pcg32,
-    snap_freq: u32,
+    pub output_file: PathBuf,
 }
 
 fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
@@ -139,7 +152,7 @@ fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
 impl World {
     pub fn new(
         experiment: Experiment,
-        snap_freq: u32,
+        output_file: PathBuf,
     ) -> World {
         // Unpack relevant info from `Experiment` data structure.
         let Experiment {
@@ -238,7 +251,7 @@ impl World {
             cells,
             interaction_generator,
             rng,
-            snap_freq,
+            output_file,
         }
     }
 
@@ -253,6 +266,12 @@ impl World {
     pub fn simulate(&mut self, final_tpoint: f32) {
         let num_tsteps =
             (final_tpoint / self.char_quants.time()).ceil() as u32;
+        let mut f = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&self.output_file)
+            .unwrap();
         while self.tstep < num_tsteps {
             let new_cells: Cells = self
                 .cells
@@ -262,25 +281,12 @@ impl World {
                     &self.world_params,
                     &self.group_params,
                     &mut self.interaction_generator,
+                    &mut f,
                 )
                 .unwrap();
 
             self.cells = new_cells;
             self.tstep += 1;
-        }
-    }
-
-    pub fn history_info(&self) -> WorldInfo {
-        WorldInfo {
-            snap_freq: self.snap_freq,
-            char_quants: self.char_quants,
-            world_params: self.world_params.clone(),
-            cell_params: self
-                .cells
-                .states
-                .iter()
-                .map(|s| self.group_params[s.group_ix].clone())
-                .collect::<Vec<Parameters>>(),
         }
     }
 }

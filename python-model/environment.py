@@ -1,10 +1,14 @@
-import numpy as np
-from . import cell
-from . import parameterorg
-from . import geometry
-import numba as nb
-import time
 import copy
+import time
+
+import numba as nb
+import numpy as np
+
+import cell
+import geometry
+import parameterorg
+
+import writer as fw
 
 """
 Environment of cells.s
@@ -42,10 +46,8 @@ class Environment:
 
     def __init__(
         self,
-        environment_name="",
         num_timesteps=0,
         cell_group_defns=None,
-        environment_dir=None,
         integration_params=None,
         allowed_drift_before_geometry_recalc=1.0,
         max_geometry_recalc_skips=1000,
@@ -58,8 +60,6 @@ class Environment:
         if integration_params is None:
             integration_params = {}
 
-        self.environment_name = environment_name
-        self.environment_dir = environment_dir
         self.cell_group_defns = cell_group_defns
 
         self.curr_tpoint = 0
@@ -356,6 +356,8 @@ class Environment:
 
         self.exec_orders[t] = np.copy(execution_sequence)
 
+        fw.write(["======================================"])
+
         for ci in execution_sequence:
             current_cell = environment_cells[ci]
 
@@ -401,6 +403,7 @@ class Environment:
             #     if self.full_print:
             #         if ci == last_ci:
             #             #print("=" * 40)
+        fw.write(["======================================"])
 
         return (
             cells_node_distance_matrix,
@@ -489,8 +492,8 @@ class Environment:
                     environment_cells_node_coords
                 )
                 delta_drifts = (
-                    geometry.calculate_centroid_dift(prev_centroids, curr_centroids)
-                    / 1e-6
+                        geometry.calculate_centroid_dift(prev_centroids, curr_centroids)
+                        / 1e-6
                 )
                 if np.all(recalc_geometry):
                     centroid_drifts = np.zeros_like(centroid_drifts)

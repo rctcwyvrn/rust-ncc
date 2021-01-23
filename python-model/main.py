@@ -1,13 +1,7 @@
-import os
+import experiment_templates as ets
+import writer as fw
 
-import general.exec_utils as eu
-import general.experiment_templates as ets
-import general.file_write as fw
-
-fw.remove_if_exists(fw.WRITE_FILE_PATH)
-
-scriptname = os.path.basename(__file__)[:-3]
-date_str, experiment_number = eu.get_date_and_experiment_number(scriptname)
+fw.remake_write_file()
 
 closeness_dist_squared_criteria = 0.5e-6 ** 2
 
@@ -71,7 +65,7 @@ do_final_analysis = True
 default_cil = 60.0
 integration_params = {"rtol": 1e-4}
 
-base_output_dir = "B:\\rust-ncc\\python-model\\output"
+base_output_dir = "/python-model/output"
 
 parameter_dict.update(
     [
@@ -116,13 +110,11 @@ if __name__ == "__main__":
     parameter_dict.update(standard_rps)
 
     ets.rust_comparison_test(
-        date_str,
-        experiment_number,
         sub_experiment_number,
         parameter_dict,
         uniform_initial_polarization=False,
         no_randomization=True,
-        base_output_dir="B:\\rust-ncc\\python-model\\output",
+        base_output_dir="/python-model/output",
         total_time_in_hours=3.0,
         timestep_length=2,
         integration_params=integration_params,

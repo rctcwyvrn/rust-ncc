@@ -47,6 +47,7 @@ fn group_layout(
 /// Define the cell groups that will exist in this experiment.
 fn cell_groups(
     rng: &mut Pcg32,
+    randomization: bool,
     cq: &CharQuantities,
     num_cells_per_group: Vec<usize>,
 ) -> Vec<CellGroup> {
@@ -55,7 +56,7 @@ fn cell_groups(
         .map(|&num_cells| CellGroup {
             num_cells,
             layout: group_layout(num_cells, cq).unwrap(),
-            parameters: gen_default_raw_params(rng, true)
+            parameters: gen_default_raw_params(rng, randomization)
                 .gen_parameters(cq),
         })
         .collect()
@@ -110,7 +111,11 @@ fn raw_world_parameters(
 }
 
 /// Generate the experiment, so that it can be run.
-pub fn generate(seed: Option<u64>, num_cells: usize) -> Experiment {
+pub fn generate(
+    seed: Option<u64>,
+    num_cells: usize,
+    randomization: bool,
+) -> Experiment {
     let mut rng = match seed {
         Some(s) => Pcg32::seed_from_u64(s),
         None => Pcg32::from_entropy(),
@@ -118,8 +123,12 @@ pub fn generate(seed: Option<u64>, num_cells: usize) -> Experiment {
     let char_quants = gen_default_char_quants();
     let world_parameters =
         raw_world_parameters(&char_quants).refine(&char_quants);
-    let cell_groups =
-        cell_groups(&mut rng, &char_quants, vec![num_cells]);
+    let cell_groups = cell_groups(
+        &mut rng,
+        randomization,
+        &char_quants,
+        vec![num_cells],
+    );
     Experiment {
         file_name: "n_cells".to_string(),
         char_quants,

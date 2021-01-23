@@ -5,9 +5,10 @@ Created on Tue May 12 13:26:37 2015
 @author: Brian
 """
 
-from . import geometry
-import numpy as np
 import numba as nb
+import numpy as np
+
+import geometry
 
 
 # -----------------------------------------------------------------

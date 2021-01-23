@@ -5,10 +5,12 @@ Created on Fri Jun  5 22:10:15 2015
 @author: brian
 """
 
-import numpy as np
-from . import environment
-from . import geometry
 import copy
+
+import numpy as np
+
+import environment
+import geometry
 
 output_mech_labels = [
     "x",
@@ -555,10 +557,8 @@ def find_undefined_labels(cell_group_parameter_dict):
 
 
 def make_environment_given_user_cell_group_defns(
-        environment_name="",
         num_timesteps=0,
         user_cell_group_defns=None,
-        environment_dir="B:\\rust-ncc\\python-model\\output",
         T=(1 / 0.5),
         integration_params=None,
         allowed_drift_before_geometry_recalc=1.0,
@@ -593,10 +593,8 @@ def make_environment_given_user_cell_group_defns(
         user_cell_group_defn.update([("parameter_dict", cell_group_parameter_dict)])
 
     the_environment = environment.Environment(
-        environment_name=environment_name,
         num_timesteps=num_timesteps,
         cell_group_defns=user_cell_group_defns,
-        environment_dir=environment_dir,
         T=T,
         integration_params=integration_params,
         allowed_drift_before_geometry_recalc=allowed_drift_before_geometry_recalc,
