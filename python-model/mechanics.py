@@ -12,7 +12,7 @@ import geometry
 
 
 # -----------------------------------------------------------------
-#@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
 def capped_linear_function(max_x, x):
     if x > max_x:
         return 1.0
@@ -64,7 +64,7 @@ def calculate_migr_bdry_contact_factors(
 
 
 # -----------------------------------------------------------------
-#@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
 def calculate_cytoplasmic_force(
     num_nodes,
     this_cell_coords,
@@ -83,7 +83,7 @@ def calculate_cytoplasmic_force(
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def calculate_spring_edge_forces(
     num_nodes, this_cell_coords, stiffness_edge, length_edge_resting
 ):
@@ -95,11 +95,9 @@ def calculate_spring_edge_forces(
         i_plus_1 = (i + 1) % num_nodes
         i_minus_1 = (i - 1) % num_nodes
         edge_vector_to_plus = geometry.calculate_vector_from_p1_to_p2_given_vectors(
-            this_cell_coords[i], this_cell_coords[i_plus_1]
-        )
+            this_cell_coords[i], this_cell_coords[i_plus_1])
         edge_vector_to_minus = geometry.calculate_vector_from_p1_to_p2_given_vectors(
-            this_cell_coords[i], this_cell_coords[i_minus_1]
-        )
+            this_cell_coords[i], this_cell_coords[i_minus_1])
 
         edge_vectors_to_plus[i, 0] = edge_vector_to_plus[0]
         edge_vectors_to_plus[i, 1] = edge_vector_to_plus[1]
@@ -107,9 +105,11 @@ def calculate_spring_edge_forces(
         edge_vectors_to_minus[i, 0] = edge_vector_to_minus[0]
         edge_vectors_to_minus[i, 1] = edge_vector_to_minus[1]
 
-    plus_dirn_edge_length = geometry.calculate_2D_vector_mags(edge_vectors_to_plus)
+    plus_dirn_edge_length = geometry.calculate_2D_vector_mags(
+        edge_vectors_to_plus)
 
-    minus_dirn_edge_length = geometry.calculate_2D_vector_mags(edge_vectors_to_minus)
+    minus_dirn_edge_length = geometry.calculate_2D_vector_mags(
+        edge_vectors_to_minus)
 
     edge_strains_plus = np.empty(num_nodes, dtype=np.float64)
     edge_strains_minus = np.empty(num_nodes, dtype=np.float64)
@@ -126,10 +126,12 @@ def calculate_spring_edge_forces(
         edge_strains_plus[i] = edge_strain_plus
         edge_strains_minus[i] = edge_strain_minus
 
-        local_average_strains[i] = 0.5 * edge_strain_plus + 0.5 * edge_strain_minus
+        local_average_strains[i] = 0.5 * \
+            edge_strain_plus + 0.5 * edge_strain_minus
 
     unit_edge_disp_vecs_plus = geometry.normalize_vectors(edge_vectors_to_plus)
-    unit_edge_disp_vecs_minus = geometry.normalize_vectors(edge_vectors_to_minus)
+    unit_edge_disp_vecs_minus = geometry.normalize_vectors(
+        edge_vectors_to_minus)
 
     EFplus_mags = np.zeros(num_nodes, dtype=np.float64)
     EFminus_mags = np.zeros(num_nodes, dtype=np.float64)
@@ -137,13 +139,14 @@ def calculate_spring_edge_forces(
         EFplus_mags[i] = edge_strains_plus[i] * stiffness_edge
         EFminus_mags[i] = edge_strains_minus[i] * stiffness_edge
 
-    EFplus = geometry.multiply_vectors_by_scalars(unit_edge_disp_vecs_plus, EFplus_mags)
+    EFplus = geometry.multiply_vectors_by_scalars(
+        unit_edge_disp_vecs_plus, EFplus_mags)
 
     EFminus = geometry.multiply_vectors_by_scalars(
         unit_edge_disp_vecs_minus, EFminus_mags
     )
 
-    return local_average_strains, EFplus, EFminus
+    return local_average_strains, EFplus, EFminus, edge_strains_plus
 
 
 # -----------------------------------------------------------------
@@ -165,7 +168,7 @@ def determine_rac_rho_domination(rac_membrane_actives, rho_membrane_actives):
 # -----------------------------------------------------------------
 
 
-#@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
 def calculate_rgtpase_mediated_forces(
     num_nodes,
         rac_membrane_actives,
@@ -255,10 +258,7 @@ def calculate_adhesion_forces(
                         - this_this_cell_coords
                     )
                     close_ni_a, close_ni_b = close_point_on_other_cells_to_each_node_indices[
-                        ni
-                    ][
-                        ci
-                    ]
+                        ni][ci]
 
                     if close_ni_a == close_ni_b:
                         # closest point is another node
@@ -268,10 +268,7 @@ def calculate_adhesion_forces(
                         close_ni_a_force = all_cells_node_forces[ci][close_ni_a]
                         close_ni_b_force = all_cells_node_forces[ci][close_ni_b]
                         projection_factor = close_point_on_other_cells_to_each_node_projection_factors[
-                            ni
-                        ][
-                            ci
-                        ]
+                            ni][ci]
                         close_point_force = (
                             1 - projection_factor
                         ) * close_ni_a_force + projection_factor * close_ni_b_force
@@ -298,7 +295,8 @@ def calculate_adhesion_forces(
                             )
                         )
 
-                        if geometry.calculate_2D_vector_mag(force_adh) > max_force_adh:
+                        if geometry.calculate_2D_vector_mag(
+                                force_adh) > max_force_adh:
                             force_adh = 0.0 * force_adh
 
                         this_node_F_adh += force_adh
@@ -331,17 +329,13 @@ def calculate_external_forces(
             if ci != this_ci:
                 if close_point_on_other_cells_to_each_node_exists[ni][ci] == 1:
                     close_ni_a, close_ni_b = close_point_on_other_cells_to_each_node_indices[
-                        ni
-                    ][
-                        ci
-                    ]
+                        ni][ci]
 
                     if close_ni_a == close_ni_b:
                         # closest point is another single node
                         close_point_force = all_cells_node_forces[ci][close_ni_a]
                         force_proj_mag = geometry.calculate_projection_of_a_on_b(
-                            close_point_force, uiv
-                        )
+                            close_point_force, uiv)
 
                         if force_proj_mag < 0.0:
                             force_proj_mag = 0.0
@@ -370,7 +364,7 @@ def calculate_external_forces(
 
 
 # ----------------------------------------------------------------------------
-#@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
 def calculate_forces(
     num_nodes,
         this_cell_coords,
@@ -387,8 +381,7 @@ def calculate_forces(
 ):
 
     unit_inside_pointing_vectors = geometry.calculate_unit_inside_pointing_vecs(
-        this_cell_coords
-    )
+        this_cell_coords)
 
     rgtpase_mediated_forces = calculate_rgtpase_mediated_forces(
         num_nodes,
@@ -409,7 +402,7 @@ def calculate_forces(
         unit_inside_pointing_vectors,
     )
 
-    local_strains, EFplus, EFminus = calculate_spring_edge_forces(
+    local_strains, EFplus, EFminus, edge_strains = calculate_spring_edge_forces(
         num_nodes, this_cell_coords, stiffness_edge, length_edge_resting
     )
 
@@ -425,6 +418,7 @@ def calculate_forces(
         EFminus,
         rgtpase_mediated_forces,
         F_cytoplasmic,
+        edge_strains,
         local_strains,
         unit_inside_pointing_vectors,
     )

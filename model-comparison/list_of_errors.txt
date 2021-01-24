@@ -1,0 +1,12 @@
+* drop frac_rgtp from CharQuants, it is not properly normalizing
+init Rho GTPase distributions
+
+* use cytoplasmic force of 1e-5
+
+* fix coa distribution exponent, under impl RawCoaParams refine.
+Should be 0.5f32.ln() / range, not 0.5f32.ln() / (range * 0.5)
+    -> more correctly, set coa_range = 220, so that halfmax
+    occurs at 0.5 * 220 = 110
+
+* in gen_coa, fix so that *x_coa[i] += ..., not *x_coa[i] = ...
+

@@ -8,9 +8,11 @@ Created on Sun Aug 07 16:00:16 2016
 import exec_utils as eu
 import numpy as np
 
-global_randomization_scheme_dict = {"m": "kgtp_rac_multipliers", "w": "wipeout"}
+global_randomization_scheme_dict = {
+    "m": "kgtp_rac_multipliers", "w": "wipeout"}
 
 # =======================================================================
+
 
 def define_group_boxes_and_corridors(
         plate_width,
@@ -22,8 +24,8 @@ def define_group_boxes_and_corridors(
         x_space_between_boxes,
         x_placement_option,
         y_placement_option,
-        origin_x_offset=10,
-        origin_y_offset=10,
+        origin_x_offset=10.0,
+        origin_y_offset=10.0,
         box_x_offsets=None,
         box_y_offsets=None,
 ):
@@ -31,7 +33,11 @@ def define_group_boxes_and_corridors(
         box_x_offsets = []
     if box_y_offsets is None:
         box_y_offsets = []
-    test_lists = [num_cells_in_boxes, box_heights, box_widths, x_space_between_boxes]
+    test_lists = [
+        num_cells_in_boxes,
+        box_heights,
+        box_widths,
+        x_space_between_boxes]
     test_list_labels = [
         "num_cells_in_boxes",
         "box_heights",
@@ -58,9 +64,7 @@ def define_group_boxes_and_corridors(
         if len(test_list) != required_len:
             raise Exception(
                 "{} length is not the required length (should be {}, got {}).".format(
-                    test_list_label, required_len, len(test_list)
-                )
-            )
+                    test_list_label, required_len, len(test_list)))
 
     for axis, placement_option in zip(
             ["x", "y"], [x_placement_option, y_placement_option]
@@ -68,25 +72,23 @@ def define_group_boxes_and_corridors(
         if placement_option not in allowed_placement_options:
             raise Exception(
                 "Given {} placement option not an allowed placement option!\nGiven: {},\nAllowed: {}".format(
-                    axis, placement_option, allowed_placement_options
-                )
-            )
+                    axis, placement_option, allowed_placement_options))
 
     if x_placement_option != "OVERRIDE":
         if x_placement_option == "ORIGIN":
             first_box_offset = origin_x_offset
         else:
             first_box_offset = 0.5 * plate_width - 0.5 * (
-                    np.sum(box_widths) + np.sum(x_space_between_boxes)
+                np.sum(box_widths) + np.sum(x_space_between_boxes)
             )
 
         for box_index in range(num_boxes):
             if box_index > 0:
                 box_x_offsets[box_index] = (
-                        first_box_offset
-                        + x_space_between_boxes[box_index - 1]
-                        + np.sum(box_widths[:box_index])
-                        + np.sum(x_space_between_boxes[: (box_index - 1)])
+                    first_box_offset
+                    + x_space_between_boxes[box_index - 1]
+                    + np.sum(box_widths[:box_index])
+                    + np.sum(x_space_between_boxes[: (box_index - 1)])
                 )
             else:
                 box_x_offsets[box_index] = first_box_offset
@@ -131,13 +133,13 @@ def stringify_randomization_info(parameter_dict):
 
 # ===========================================================================
 
+
 def rust_comparison_test(
         sub_experiment_number,
         parameter_dict,
         num_cells_responsive_to_chemoattractant=-1,
         uniform_initial_polarization=False,
         no_randomization=False,
-        base_output_dir="B:\\Desktop\\python-model\\output",
         total_time_in_hours=3,
         timestep_length=2,
         integration_params=None,
@@ -176,8 +178,10 @@ def rust_comparison_test(
     ) + stringify_randomization_info(parameter_dict)
     if uniform_initial_polarization:
         experiment_name += "-UIP"
-    if not (num_cells_responsive_to_chemoattractant >= num_cells or num_cells_responsive_to_chemoattractant < 0):
-        experiment_name += "-NRESP={}".format(num_cells_responsive_to_chemoattractant)
+    if not (num_cells_responsive_to_chemoattractant >=
+            num_cells or num_cells_responsive_to_chemoattractant < 0):
+        experiment_name += "-NRESP={}".format(
+            num_cells_responsive_to_chemoattractant)
 
     total_time = total_time_in_hours * 3600
     num_timesteps = int(total_time / timestep_length)
@@ -193,8 +197,6 @@ def rust_comparison_test(
     initial_x_placement_options = "ORIGIN"
     box_x_offsets = [0.0]
     plate_height = plate_width
-
-    origin_y_offset = 0.0
     initial_y_placement_options = "ORIGIN"
 
     boxes, box_x_offsets, box_y_offsets = define_group_boxes_and_corridors(
@@ -207,7 +209,8 @@ def rust_comparison_test(
         x_space_between_boxes,
         initial_x_placement_options,
         initial_y_placement_options,
-        origin_y_offset=origin_y_offset,
+        origin_x_offset=0.0,
+        origin_y_offset=0.0,
         box_x_offsets=box_x_offsets,
     )
 
@@ -228,7 +231,8 @@ def rust_comparison_test(
         dict([(n, cil_dict) for n in range(num_boxes)])
     ]
 
-    biased_rgtpase_distrib_defn_dicts = [[biased_rgtpase_distrib_defn_dict] * num_boxes]
+    biased_rgtpase_distrib_defn_dicts = [
+        [biased_rgtpase_distrib_defn_dict] * num_boxes]
     parameter_dict_per_sub_experiment = [[parameter_dict] * num_boxes]
 
     user_cell_group_defns_per_subexperiment = []
@@ -254,13 +258,13 @@ def rust_comparison_test(
                     this_box_height + this_box_y_offset,
                 ]
             )
-                                       * 1e-6,
+            * 1e-6,
             "interaction_factors_intercellular_contact_per_celltype":
                 intercellular_contact_factor_magnitudes_defn_dicts_per_sub_experiment[
                     si
-                ][
+            ][
                     bi
-                ],
+            ],
             "interaction_factors_coa_per_celltype": cell_dependent_coa_signal_strengths_defn_dicts_per_sub_experiment[
                 si
             ][
@@ -293,4 +297,3 @@ def rust_comparison_test(
         experiment_name,
         environment_wide_variable_defns,
     )
-

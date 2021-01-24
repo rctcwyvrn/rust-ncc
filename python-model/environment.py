@@ -28,6 +28,7 @@ def custom_floor(fp_number, roundoff_distance):
     else:
         return a
 
+
 # -----------------------------------------------------------------
 
 
@@ -37,6 +38,7 @@ def calc_bounding_box_centre(bb):
 
     return np.array([x, y])
 
+
 # -----------------------------------------------------------------
 
 
@@ -45,16 +47,16 @@ class Environment:
     """
 
     def __init__(
-        self,
-        num_timesteps=0,
-        cell_group_defns=None,
-        integration_params=None,
-        allowed_drift_before_geometry_recalc=1.0,
-        max_geometry_recalc_skips=1000,
-        cell_placement_method="",
-        max_placement_distance_factor=1.0,
-        shell_environment=False,
-        T=0.0,
+            self,
+            num_timesteps=0,
+            cell_group_defns=None,
+            integration_params=None,
+            allowed_drift_before_geometry_recalc=1.0,
+            max_geometry_recalc_skips=1000,
+            cell_placement_method="",
+            max_placement_distance_factor=1.0,
+            shell_environment=False,
+            T=0.0,
     ):
 
         if integration_params is None:
@@ -68,6 +70,8 @@ class Environment:
         self.num_timesteps = num_timesteps
         self.num_timepoints = num_timesteps + 1
         self.timepoints = np.arange(0, self.num_timepoints)
+
+        self.num_int_steps = 10
 
         self.integration_params = integration_params
 
@@ -88,7 +92,8 @@ class Environment:
             self.num_cell_groups = 0
             self.num_cells = 0
 
-        self.allowed_drift_before_geometry_recalc = allowed_drift_before_geometry_recalc
+        self.allowed_drift_before_geometry_recalc = \
+            allowed_drift_before_geometry_recalc
         self.max_geometry_recalc_skips = max_geometry_recalc_skips
         if not shell_environment:
             self.cells_in_environment = self.make_cells()
@@ -99,7 +104,8 @@ class Environment:
             for n in num_nodes_per_cell[1:]:
                 if n != self.num_nodes:
                     raise Exception(
-                        "There exists a cell with number of nodes different from other cells!"
+                        "There exists a cell with number of nodes different "
+                        "from other cells!"
                     )
         else:
             self.cells_in_environment = None
@@ -130,6 +136,25 @@ class Environment:
             ],
             dtype=np.int64,
         )
+
+        environment_cells_node_coords = np.array(
+            [x.curr_node_coords for x in self.cells_in_environment]
+        )
+        cells_bounding_box_array = \
+            geometry.create_initial_bounding_box_polygon_array(
+            self.num_cells, environment_cells_node_coords)
+        (
+            cells_node_distance_matrix,
+            cells_line_segment_intersection_matrix,
+        ) = geometry.create_initial_line_segment_intersection_and_dist_squared_matrices_old(
+            self.num_cells,
+            self.num_nodes,
+            cells_bounding_box_array,
+            environment_cells_node_coords,
+        )
+        for (ci, cell) in enumerate(self.cells_in_environment):
+            cell.initialize_cell(cells_node_distance_matrix[ci],
+                                 cells_line_segment_intersection_matrix[ci])
 
         self.mode = MODE_EXECUTE
         self.animation_settings = None
@@ -163,7 +188,8 @@ class Environment:
         cell_bounding_boxes_wrt_time = []
 
         ci_offset = 0
-        for cell_group_index, cell_group_defn in enumerate(self.cell_group_defns):
+        for cell_group_index, cell_group_defn in enumerate(
+                self.cell_group_defns):
             cells_in_group, init_cell_bounding_boxes = self.create_cell_group(
                 self.num_timesteps, cell_group_defn, cell_group_index, ci_offset
             )
@@ -176,7 +202,7 @@ class Environment:
     # -----------------------------------------------------------------
 
     def create_cell_group(
-        self, num_timesteps, cell_group_defn, cell_group_index, ci_offset
+            self, num_timesteps, cell_group_defn, cell_group_index, ci_offset
     ):
         cell_group_name = cell_group_defn["cell_group_name"]
         num_cells = cell_group_defn["num_cells"]
@@ -186,7 +212,8 @@ class Environment:
         init_cell_radius = cell_parameter_dict["init_cell_radius"]
         num_nodes = cell_parameter_dict["num_nodes"]
 
-        biased_rgtpase_distrib_defns = cell_group_defn["biased_rgtpase_distrib_defns"]
+        biased_rgtpase_distrib_defns = cell_group_defn[
+            "biased_rgtpase_distrib_defns"]
         cells_with_bias_info = list(biased_rgtpase_distrib_defns.keys())
 
         integration_params = self.integration_params
@@ -224,7 +251,8 @@ class Environment:
 
             ci = ci_offset + cell_number
 
-            undefined_labels = parameterorg.find_undefined_labels(cell_parameter_dict)
+            undefined_labels = parameterorg.find_undefined_labels(
+                cell_parameter_dict)
             if len(undefined_labels) > 0:
                 raise Exception(
                     "The following labels are not yet defined: {}".format(
@@ -240,9 +268,9 @@ class Environment:
                 num_timesteps,
                 self.T,
                 self.num_cells,
+                self.num_int_steps,
                 cell_parameter_dict,
-                )
-
+            )
 
             cells_in_group.append(new_cell)
 
@@ -253,8 +281,8 @@ class Environment:
     @staticmethod
     def calculate_cell_bounding_boxes(
             num_cells,
-        init_cell_radius,
-        cell_group_bounding_box,
+            init_cell_radius,
+            cell_group_bounding_box,
     ):
 
         cell_bounding_boxes = np.zeros((num_cells, 4), dtype=np.float64)
@@ -270,17 +298,22 @@ class Environment:
 
         if total_cell_group_area > cell_group_bounding_box_area:
             raise Exception(
-                "Cell group bounding box is not big enough to contain all cells given init_cell_radius constraint."
+                "Cell group bounding box is not big enough to contain all "
+                "cells given init_cell_radius constraint."
             )
         num_cells_along_x = custom_floor(x_length / cell_diameter, 1e-6)
         num_cells_along_y = custom_floor(y_length / cell_diameter, 1e-6)
 
         cell_x_coords = (
-            xmin + np.sign(x_length) * np.arange(num_cells_along_x) * cell_diameter
-        )
+                xmin +
+                np.sign(x_length) *
+                np.arange(num_cells_along_x) *
+                cell_diameter)
         cell_y_coords = (
-            ymin + np.sign(y_length) * np.arange(num_cells_along_y) * cell_diameter
-        )
+                ymin +
+                np.sign(y_length) *
+                np.arange(num_cells_along_y) *
+                cell_diameter)
         x_step = np.sign(x_length) * cell_diameter
         y_step = np.sign(y_length) * cell_diameter
 
@@ -300,7 +333,6 @@ class Environment:
             else:
                 yi += 1
 
-
         return cell_bounding_boxes
 
     # -----------------------------------------------------------------
@@ -311,7 +343,8 @@ class Environment:
     ):
         cell_centre = calc_bounding_box_centre(bounding_box)
 
-        cell_node_thetas = np.pi * np.linspace(0, 2, endpoint=False, num=num_nodes)
+        cell_node_thetas = np.pi * \
+                           np.linspace(0, 2, endpoint=False, num=num_nodes)
         cell_node_coords = np.transpose(
             np.array(
                 [
@@ -322,9 +355,12 @@ class Environment:
         )
 
         # rotation_theta = np.random.rand()*2*np.pi
-        # cell_node_coords = np.array([geometry.rotate_2D_vector_CCW_by_theta(rotation_theta, x) for x in cell_node_coords], dtype=np.float64)
+        # cell_node_coords = np.array([
+        # geometry.rotate_2D_vector_CCW_by_theta(rotation_theta, x) for x in
+        # cell_node_coords], dtype=np.float64)
         cell_node_coords = np.array(
-            [[x + cell_centre[0], y + cell_centre[1]] for x, y in cell_node_coords],
+            [[x + cell_centre[0], y + cell_centre[1]] for x, y in
+             cell_node_coords],
             dtype=np.float64,
         )
 
@@ -341,26 +377,27 @@ class Environment:
 
     # -----------------------------------------------------------------
     def execute_system_dynamics_in_random_sequence(
-        self,
-        t,
-        cells_node_distance_matrix,
-        cells_bounding_box_array,
-        cells_line_segment_intersection_matrix,
-        environment_cells_node_coords,
-        environment_cells_node_forces,
-        environment_cells,
-        recalc_geometry,
+            self,
+            t,
+            cells_node_distance_matrix,
+            cells_bounding_box_array,
+            cells_line_segment_intersection_matrix,
+            environment_cells_node_coords,
+            environment_cells_node_forces,
+            environment_cells,
+            recalc_geometry,
     ):
         execution_sequence = self.cell_indices
         np.random.shuffle(execution_sequence)
 
         self.exec_orders[t] = np.copy(execution_sequence)
 
-        fw.write(["======================================"])
+        fw.write(["=============================="])
 
         for ci in execution_sequence:
             current_cell = environment_cells[ci]
 
+            fw.write(["++++++++++++++++++++++++++++++", "ci: {}".format(ci)])
             current_cell.execute_step(
                 ci,
                 self.num_nodes,
@@ -369,10 +406,13 @@ class Environment:
                 cells_node_distance_matrix[ci],
                 cells_line_segment_intersection_matrix[ci],
             )
+            fw.write(["++++++++++++++++++++++++++++++"])
 
             if not current_cell.skip_dynamics:
-                this_cell_coords = current_cell.curr_node_coords * current_cell.L
-                this_cell_forces = current_cell.curr_node_forces * current_cell.ML_T2
+                this_cell_coords = current_cell.curr_node_coords * \
+                                   current_cell.L
+                this_cell_forces = current_cell.curr_node_forces * \
+                                   current_cell.ML_T2
 
                 environment_cells_node_coords[ci] = this_cell_coords
                 environment_cells_node_forces[ci] = this_cell_forces
@@ -381,7 +421,9 @@ class Environment:
                     ci
                 ] = geometry.calculate_polygon_bounding_box(this_cell_coords)
                 if recalc_geometry[ci]:
-                    # cells_node_distance_matrix, cells_line_segment_intersection_matrix =  geometry.update_line_segment_intersection_and_dist_squared_matrices_old(ci, self.num_cells, self.num_nodes, environment_cells_node_coords, cells_bounding_box_array, cells_node_distance_matrix, cells_line_segment_intersection_matrix)
+                    # cells_node_distance_matrix,
+                    # cells_line_segment_intersection_matrix =
+                    # geometry.update_line_segment_intersection_and_dist_squared_matrices_old(ci, self.num_cells, self.num_nodes, environment_cells_node_coords, cells_bounding_box_array, cells_node_distance_matrix, cells_line_segment_intersection_matrix)
                     geometry.update_line_segment_intersection_and_dist_squared_matrices(
                         4,
                         self.geometry_tasks_per_cell[ci],
@@ -397,13 +439,16 @@ class Environment:
                         environment_cells_node_coords,
                         cells_node_distance_matrix,
                     )
-                    # cells_node_distance_matrix = geometry.update_distance_squared_matrix_old(ci, self.num_cells, self.num_nodes, environment_cells_node_coords, cells_node_distance_matrix)
+                    # cells_node_distance_matrix =
+                    # geometry.update_distance_squared_matrix_old(ci,
+                    # self.num_cells, self.num_nodes,
+                    # environment_cells_node_coords, cells_node_distance_matrix)
 
             # if self.verbose == True:
             #     if self.full_print:
             #         if ci == last_ci:
             #             #print("=" * 40)
-        fw.write(["======================================"])
+        fw.write(["=============================="])
 
         return (
             cells_node_distance_matrix,
@@ -412,10 +457,11 @@ class Environment:
             environment_cells_node_coords,
             environment_cells_node_forces,
         )
+
     # -----------------------------------------------------------------
 
     def execute_system_dynamics(
-        self,
+            self,
     ):
         allowed_drift_before_geometry_recalc = (
             self.allowed_drift_before_geometry_recalc
@@ -436,12 +482,14 @@ class Environment:
             [x.curr_node_forces * x.ML_T2 for x in environment_cells]
         )
 
-        curr_centroids = geometry.calculate_centroids(environment_cells_node_coords)
+        curr_centroids = geometry.calculate_centroids(
+            environment_cells_node_coords)
 
-        cells_bounding_box_array = geometry.create_initial_bounding_box_polygon_array(
-            num_cells, environment_cells_node_coords
-        )
-        # num_cells, num_nodes_per_cell, init_cells_bounding_box_array, init_all_cells_node_coords
+        cells_bounding_box_array = \
+            geometry.create_initial_bounding_box_polygon_array(
+            num_cells, environment_cells_node_coords)
+        # num_cells, num_nodes_per_cell, init_cells_bounding_box_array,
+        # init_all_cells_node_coords
         (
             cells_node_distance_matrix,
             cells_line_segment_intersection_matrix,
@@ -452,7 +500,9 @@ class Environment:
             environment_cells_node_coords,
         )
 
-        # cells_node_distance_matrix = geometry.create_initial_distance_squared_matrix(num_cells, num_nodes, environment_cells_node_coords)
+        # cells_node_distance_matrix =
+        # geometry.create_initial_distance_squared_matrix(num_cells,
+        # num_nodes, environment_cells_node_coords)
 
         cell_group_indices = []
         cell_Ls = []
@@ -467,8 +517,14 @@ class Environment:
             cell_etas.append(a_cell.eta)
             cell_skip_dynamics.append(a_cell.skip_dynamics)
 
+        fw.write(["******************************",
+                  "num_tsteps: {}".format(self.num_timesteps),
+                  "num_cells: {}".format(self.num_cells),
+                  "num_int_steps: {}".format(self.num_int_steps),
+                  "******************************"])
+
         if self.curr_tpoint == 0 or self.curr_tpoint < self.num_timesteps:
-            for t in self.timepoints[self.curr_tpoint : -1]:
+            for t in self.timepoints[self.curr_tpoint: -1]:
 
                 (
                     cells_node_distance_matrix,
@@ -492,19 +548,23 @@ class Environment:
                     environment_cells_node_coords
                 )
                 delta_drifts = (
-                        geometry.calculate_centroid_dift(prev_centroids, curr_centroids)
-                        / 1e-6
-                )
+                        geometry.calculate_centroid_dift(
+                            prev_centroids,
+                            curr_centroids) / 1e-6)
                 if np.all(recalc_geometry):
                     centroid_drifts = np.zeros_like(centroid_drifts)
                     recalc_geometry = np.zeros_like(recalc_geometry)
                 else:
                     centroid_drifts = centroid_drifts + delta_drifts
 
-                if np.max(centroid_drifts) > allowed_drift_before_geometry_recalc:
+                if np.max(
+                        centroid_drifts) > allowed_drift_before_geometry_recalc:
                     recalc_geometry = np.ones_like(recalc_geometry)
-                #                    centroid_drifts = np.where(recalc_geometry, 0.0, centroid_drifts + delta_drifts)
-                #                    recalc_geometry = centroid_drifts > allowed_drift_before_geometry_recalc
+                #                    centroid_drifts = np.where(
+                #                    recalc_geometry, 0.0, centroid_drifts +
+                #                    delta_drifts)
+                #                    recalc_geometry = centroid_drifts >
+                #                    allowed_drift_before_geometry_recalc
 
                 self.curr_tpoint += 1
         else:
@@ -517,7 +577,5 @@ class Environment:
         print(
             ("Time taken to complete simulation: {}s".format(simulation_time))
         )
-
-
 
 # -----------------------------------------------------------------

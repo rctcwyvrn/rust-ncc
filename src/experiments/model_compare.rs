@@ -1,22 +1,18 @@
-#![allow(unused)]
-use crate::cell::chemistry::{
-    DistributionScheme, DistributionType, RgtpDistribution,
-};
 use crate::experiments::{
-    gen_default_adhesion_mag, gen_default_char_quants,
-    gen_default_phys_contact_dist, gen_default_raw_params,
-    gen_default_viscosity, CellGroup, Experiment, GroupBBox,
+    gen_default_char_quants, gen_default_phys_contact_dist,
+    gen_default_raw_params, gen_default_viscosity, CellGroup,
+    Experiment, GroupBBox,
 };
 use crate::interactions::dat_sym2d::SymCcDat;
 use crate::math::v2d::V2D;
-use crate::parameters::quantity::{Force, Length, Quantity};
+use crate::parameters::quantity::{Length, Quantity};
 use crate::parameters::{
-    CharQuantities, CoaParams, PhysicalContactParams, RawCloseBounds,
-    RawCoaParams, RawInteractionParams, RawParameters,
-    RawPhysicalContactParams, RawWorldParameters,
+    CharQuantities, RawCloseBounds, RawCoaParams,
+    RawInteractionParams, RawPhysicalContactParams,
+    RawWorldParameters,
 };
 use crate::utils::pcg32::Pcg32;
-use crate::NVERTS;
+
 use rand::SeedableRng;
 
 /// Generate the group layout to use for this experiment.
@@ -63,12 +59,14 @@ fn cell_groups(
 }
 
 /// Generate CAL values between different cells.
+#[allow(unused)]
 fn gen_cal_mat() -> SymCcDat<f32> {
     SymCcDat::<f32>::new(2, 0.0)
 }
 
 /// Generate CIL values between different cells (see SI for
 /// justification).
+#[allow(unused)]
 fn gen_cil_mat() -> SymCcDat<f32> {
     SymCcDat::<f32>::new(2, 60.0)
 }
@@ -76,7 +74,7 @@ fn gen_cil_mat() -> SymCcDat<f32> {
 /// Generate raw world parameters, in particular, how
 /// cells interact with each other, and any boundaries.
 fn raw_world_parameters(
-    char_quants: &CharQuantities,
+    _char_quants: &CharQuantities,
 ) -> RawWorldParameters {
     // Some(RawCoaParams {
     //     los_penalty: 2.0,
@@ -89,7 +87,7 @@ fn raw_world_parameters(
         interactions: RawInteractionParams {
             coa: Some(RawCoaParams {
                 los_penalty: 2.0,
-                range: Length(110.0).micro(),
+                range: Length(220.0).micro(),
                 mag: 24.0,
             }),
             chem_attr: None,
@@ -99,11 +97,8 @@ fn raw_world_parameters(
                     one_at.mul_number(2.0),
                     one_at,
                 ),
-                adh_mag: Some(gen_default_adhesion_mag(
-                    char_quants,
-                    0.0,
-                )),
-                cal_mag: Some(0.0),
+                adh_mag: None,
+                cal_mag: None,
                 cil_mag: 60.0,
             },
         },

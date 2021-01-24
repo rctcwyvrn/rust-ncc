@@ -33,7 +33,6 @@ pub struct CharQuantities {
     pub k_mem_on: Tinv,
     pub kgtp: Tinv,
     pub kdgtp: Tinv,
-    pub frac_rgtp: f32,
 }
 
 impl CharQuantities {
@@ -106,7 +105,7 @@ impl RawCoaParams {
         CoaParams {
             los_penalty: self.los_penalty,
             range,
-            mag: self.mag,
+            mag: self.mag / NVERTS as f32,
             // self.mag * exp(distrib_exp * x), where x is distance
             // between points.
             distrib_exp: 0.5f32.ln() / (0.5 * range),
@@ -231,7 +230,7 @@ pub struct CoaParams {
     /// Factor controlling to what extent line-of-sight blockage
     /// should be penalized. See SI for further information.
     pub los_penalty: f32,
-    //TODO: Expand upon the exponential curve used to mdoel COA
+    //TODO: Expand upon the exponential curve used to model COA
     // (see SI). Confirm whether it is half-max, or full-max range.
     /// Factor controlling shape of the exponential modelling COA
     /// interaction. It captures the (half?)-maximum distance between
@@ -315,7 +314,7 @@ pub struct RawParameters {
     /// Friction force opposing RhoA pulling.
     pub rho_friction: f32,
     /// Stiffness of cytoplasm.
-    pub stiffness_ctyo: Force,
+    pub stiffness_cyto: Force,
     /// Diffusion rate of Rho GTPase on membrane.
     pub diffusion_rgtp: Diffusion,
     /// Initial distribution of Rac1.
@@ -377,7 +376,7 @@ pub struct Parameters {
     /// RhoA mediated protrusive force constant.
     pub const_retractive: f32,
     /// Stiffness of cytoplasm.
-    pub stiffness_ctyo: f32,
+    pub stiffness_cyto: f32,
     /// Rate of Rho GTPase GDI unbinding and subsequent membrane attachment.
     pub k_mem_on_vertex: f32,
     /// Rate of Rho GTPase membrane disassociation.
@@ -455,12 +454,12 @@ impl RawParameters {
         let const_retractive =
             const_protrusive.mul_number(self.rho_friction);
         let halfmax_vertex_rgtp_act =
-            (self.halfmax_rgtp_frac / bq.frac_rgtp) / NVERTS as f32;
+            (self.halfmax_rgtp_frac) / NVERTS as f32;
         let halfmax_vertex_rgtp_conc =
             rel.pow(-1.0).mul_number(halfmax_vertex_rgtp_act);
         let stiffness_edge = self.stiffness_cortex.g() * bq.l3d.g();
         let stiffness_cyto =
-            self.stiffness_ctyo.g().mul_number(1.0 / NVERTS as f32);
+            self.stiffness_cyto.g().mul_number(1.0 / NVERTS as f32);
 
         Parameters {
             cell_r: bq.normalize(&cell_r),
@@ -469,7 +468,7 @@ impl RawParameters {
             stiffness_edge: bq.normalize(&stiffness_edge),
             const_protrusive: bq.normalize(&const_protrusive),
             const_retractive: bq.normalize(&const_retractive),
-            stiffness_ctyo: bq.normalize(&stiffness_cyto),
+            stiffness_cyto: bq.normalize(&stiffness_cyto),
             k_mem_on_vertex: bq.normalize(&bq.k_mem_on)
                 / NVERTS as f32,
             k_mem_off: bq.normalize(&bq.k_mem_off),
@@ -506,7 +505,7 @@ impl RawParameters {
             rand_std_t: bq.normalize(&self.rand_std_t).ceil(),
             rand_mag: self.rand_mag,
             num_rand_vs: (self.rand_vs * NVERTS as f32) as u32,
-            total_rgtp: 1.0 / bq.frac_rgtp,
+            total_rgtp: 1.0,
         }
     }
 }

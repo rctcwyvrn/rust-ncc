@@ -239,32 +239,30 @@ for parameter_dict in [
     all_user_parameters_with_justifications.update(parameter_dict)
 
 # -----------------------------------------------------------------
+
+
 def verify_user_parameters(justify_parameters, user_parameter_dict):
     global all_user_parameters_with_justifications
 
     for key in list(user_parameter_dict.keys()):
         try:
             justification = all_user_parameters_with_justifications[key]
-        except:
+        except BaseException:
             raise Exception("Unknown parameter given: {}".format(key))
 
         if justify_parameters and justification is not None:
             value = user_parameter_dict[key]
 
-            if type(justification) == list:
+            if isinstance(justification, list):
                 assert len(justification) == 2
                 if not (justification[0] <= value <= justification[1]):
                     raise Exception(
                         "Parameter {} violates justification ({}) with value {}".format(
-                            key, justification, value
-                        )
-                    )
+                            key, justification, value))
             elif value != justification:
                 raise Exception(
                     "Parameter {} violates justification ({}) with value {}".format(
-                        key, justification, value
-                    )
-                )
+                        key, justification, value))
 
 
 # -----------------------------------------------------------------
@@ -321,11 +319,11 @@ def make_cell_group_parameter_dict(justify_parameters, user_parameter_dict):
     )  # per second
     # --------------
     cell_parameter_dict["kgtp_rac_autoact_baseline"] = (
-        user_parameter_dict["kgtp_rac_autoact_multiplier"] * kgtp_rac_unmodified
-    )  # per second
+        user_parameter_dict["kgtp_rac_autoact_multiplier"] *
+        kgtp_rac_unmodified)  # per second
     cell_parameter_dict["kgtp_rho_autoact_baseline"] = (
-        user_parameter_dict["kgtp_rho_autoact_multiplier"] * kgtp_rho_unmodified
-    )  # per second
+        user_parameter_dict["kgtp_rho_autoact_multiplier"] *
+        kgtp_rho_unmodified)  # per second
     # --------------
     cell_parameter_dict["kdgtp_rho_mediated_rac_inhib_baseline"] = (
         kdgtp_rac_unmodified
@@ -391,9 +389,7 @@ def make_cell_group_parameter_dict(justify_parameters, user_parameter_dict):
         user_parameter_dict["init_cell_radius"],
     )
     cell_parameter_dict["num_nodes"], cell_parameter_dict["init_cell_radius"] = (
-        num_nodes,
-        init_cell_radius,
-    )
+        num_nodes, init_cell_radius, )
 
     cell_node_thetas = np.pi * np.linspace(0, 2, endpoint=False, num=num_nodes)
     cell_node_coords = np.transpose(
@@ -410,7 +406,8 @@ def make_cell_group_parameter_dict(justify_parameters, user_parameter_dict):
     length_edge_resting = np.average(edge_lengths)
 
     length_3D_dimension = user_parameter_dict["length_3D_dimension"]
-    cell_parameter_dict["eta"] = user_parameter_dict["eta"] * length_3D_dimension
+    cell_parameter_dict["eta"] = user_parameter_dict["eta"] * \
+        length_3D_dimension
     cell_parameter_dict["stiffness_edge"] = (
         user_parameter_dict["stiffness_edge"] * length_3D_dimension
     )
@@ -478,12 +475,11 @@ def expand_interaction_factors_intercellular_contact_per_celltype_array(
     num_cell_groups, cell_group_defns, this_cell_group_defn
 ):
     interaction_factors_intercellular_contact_per_celltype_defn = this_cell_group_defn[
-        "interaction_factors_intercellular_contact_per_celltype"
-    ]
+        "interaction_factors_intercellular_contact_per_celltype"]
 
     num_defns = len(
-        list(interaction_factors_intercellular_contact_per_celltype_defn.keys())
-    )
+        list(
+            interaction_factors_intercellular_contact_per_celltype_defn.keys()))
 
     if num_defns != num_cell_groups:
         raise Exception(
@@ -495,8 +491,7 @@ def expand_interaction_factors_intercellular_contact_per_celltype_array(
         cg = cell_group_defns[cgi]
         cg_name = cg["cell_group_name"]
         intercellular_contact_factor_mag = interaction_factors_intercellular_contact_per_celltype_defn[
-            cg_name
-        ]
+            cg_name]
 
         interaction_factors_intercellular_contact_per_celltype += (
             cell_group_defns[cgi]["num_cells"]
@@ -531,9 +526,8 @@ def expand_interaction_factors_coa_per_celltype_array(
             interaction_factors_coa_per_celltype_defn[cg_name] / cg_num_nodes
         )
 
-        interaction_factors_coa_per_celltype += (cell_group_defns[cgi]["num_cells"]) * [
-            coa_signal_strength
-        ]
+        interaction_factors_coa_per_celltype += (
+            cell_group_defns[cgi]["num_cells"]) * [coa_signal_strength]
 
     return np.array(interaction_factors_coa_per_celltype)
 
@@ -572,7 +566,8 @@ def make_environment_given_user_cell_group_defns(
         integration_params = {}
     num_cell_groups = len(user_cell_group_defns)
 
-    for cell_group_defn_index, user_cell_group_defn in enumerate(user_cell_group_defns):
+    for cell_group_defn_index, user_cell_group_defn in enumerate(
+            user_cell_group_defns):
         user_cell_group_parameter_dict = copy.deepcopy(
             user_cell_group_defn["parameter_dict"]
         )
@@ -590,7 +585,8 @@ def make_environment_given_user_cell_group_defns(
             justify_parameters, user_cell_group_parameter_dict
         )
 
-        user_cell_group_defn.update([("parameter_dict", cell_group_parameter_dict)])
+        user_cell_group_defn.update(
+            [("parameter_dict", cell_group_parameter_dict)])
 
     the_environment = environment.Environment(
         num_timesteps=num_timesteps,

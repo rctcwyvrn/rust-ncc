@@ -18,8 +18,9 @@ import mechanics
 
 # ----------------------------------------------------------------------------------------
 def pack_state_array(
-    nodal_phase_var_indices, ode_cellwide_phase_var_indices, system_info_at_tstep
-):
+        nodal_phase_var_indices,
+        ode_cellwide_phase_var_indices,
+        system_info_at_tstep):
     nodal_phase_var_array = (
         np.transpose(system_info_at_tstep[:, nodal_phase_var_indices])
     ).flatten()
@@ -37,19 +38,24 @@ def unpack_state_array(num_nodal_phase_var_indices, state_array):
     ode_cellwide_phase_vars = np.array([])
 
     # reversing flatten
-    nodal_phase_vars = np.split(node_phase_var_array, num_nodal_phase_var_indices)
+    nodal_phase_vars = np.split(
+        node_phase_var_array,
+        num_nodal_phase_var_indices)
 
     return nodal_phase_vars, ode_cellwide_phase_vars
 
 
 # ----------------------------------------------------------------------------------------
 def pack_state_array_from_system_history(
-    nodal_phase_var_indices, ode_cellwide_phase_var_indices, system_info, access_index
-):
+        nodal_phase_var_indices,
+        ode_cellwide_phase_var_indices,
+        system_info,
+        access_index):
     system_info_at_tstep = system_info[access_index]
     state_array = pack_state_array(
-        nodal_phase_var_indices, ode_cellwide_phase_var_indices, system_info_at_tstep
-    )
+        nodal_phase_var_indices,
+        ode_cellwide_phase_var_indices,
+        system_info_at_tstep)
 
     return state_array
 
@@ -68,27 +74,32 @@ def calculate_sum(num_elements, sequence):
 def eulerint(f, current_state, tpoints, args, num_int_steps):
     num_tpoint_pairs = tpoints.shape[0] - 1
     tpoint_pairs = np.zeros((num_tpoint_pairs, 2), dtype=np.float64)
-    states = np.zeros((tpoints.shape[0], current_state.shape[0]), dtype=np.float64)
+    states = np.zeros(
+        (tpoints.shape[0],
+         current_state.shape[0]),
+        dtype=np.float64)
 
     states[0] = current_state
 
     for i in range(num_tpoint_pairs):
-        j = 2*i
-        tpoint_pairs[i] = tpoints[j:j+2]
+        j = 2 * i
+        tpoint_pairs[i] = tpoints[j:j + 2]
 
     for i in range(tpoint_pairs.shape[0]):
         init_t, end_t = tpoint_pairs[i]
         current_state = states[i]
-        dt = (end_t - init_t)/num_int_steps
+        dt = (end_t - init_t) / num_int_steps
 
         for j in range(num_int_steps):
-            current_state = current_state + dt*f(current_state, *args)
+            current_state = current_state + dt * f(current_state, *args)
 
         states[i + 1] = current_state
 
     return states
 
-#@nb.jit()
+# @nb.jit()
+
+
 def cell_dynamics(
     state_array,
         this_cell_index,
@@ -194,7 +205,8 @@ def cell_dynamics(
         - calculate_sum(num_nodes, rho_membrane_inactives)
     )
 
-    F, EFplus, EFminus, F_rgtpase, F_cytoplasmic, local_strains, unit_inside_pointing_vectors = mechanics.calculate_forces(
+    F, EFplus, EFminus, F_rgtpase, F_cytoplasmic, edge_strains, local_strains, \
+    unit_inside_pointing_vectors = mechanics.calculate_forces(
         num_nodes,
         node_coords,
         rac_membrane_actives,
@@ -377,15 +389,16 @@ def cell_dynamics(
     #                 max_movement_mag,
     #                 success_condition_stay_in,
     #             )
-
-    fw.write(["++++++++++++++++++++++++++++++",
-              "ci: {}".format(this_cell_index),
-              "vertex_coords: {}".format([list(x) for x in node_coords]),
+    poly_area = geometry.calculate_polygon_area(node_coords)
+    fw.write(["------------------------------",
+              "poly: {}".format([list(x) for x in node_coords]),
               "rac_acts: {}".format(list(rac_membrane_actives)),
               "rac_inacts: {}".format(list(rac_membrane_inactives)),
               "rho_acts: {}".format(list(rho_membrane_actives)),
               "rho_inacts: {}".format(list(rho_membrane_inactives)),
               "tot_forces: {}".format([list([x, y]) for x, y in zip(F_x, F_y)]),
+              "uivs: {}".format([list(x) for x in
+                                 unit_inside_pointing_vectors]),
               "rgtp_forces: {}".format([list(x) for x in F_rgtpase]),
               "edge_forces: {}".format([list(x) for x in EFplus]),
               "cyto_forces: {}".format([list(x) for x in F_cytoplasmic]),
@@ -393,7 +406,15 @@ def cell_dynamics(
               "kdgtps_rac: {}".format(list(kdgtps_rac)),
               "kgtps_rho: {}".format(list(kgtps_rho)),
               "kdgtps_rho: {}".format(list(kdgtps_rho)),
-              "++++++++++++++++++++++++++++++",
+              "conc_rac_acts: {}".format(list(conc_rac_membrane_actives)),
+              "x_cils: {}".format(list(intercellular_contact_factors)),
+              "x_coas: {}".format(list(transduced_coa_signals)),
+              "rac_act_net_fluxes: {}".format(list(
+                  diffusion_rac_membrane_active)),
+              "edge_strains: {}".format(list(
+                  edge_strains)),
+              "poly_area: {}".format([poly_area] * num_nodes),
+              "------------------------------",
               ])
 
     for ni in range(num_nodes):
@@ -472,13 +493,15 @@ def determine_volume_exclusion_effects(
     #        movement_mag = geometry.calculate_2D_vector_mag(old_coord - new_coord)
     #        return old_coord + movement_mag*unit_inside_pointing_vector
 
-    min_x, max_x, min_y, max_y = geometry.calculate_polygon_bounding_box(polygon)
+    min_x, max_x, min_y, max_y = geometry.calculate_polygon_bounding_box(
+        polygon)
 
     old_coord_status = geometry.is_point_in_polygon_given_bounding_box(
         old_coord, polygon, min_x, max_x, min_y, max_y
     )
 
-    # we know that the new coord is not in the polygon, now, so we test the old_coord
+    # we know that the new coord is not in the polygon, now, so we test the
+    # old_coord
     if old_coord_status != success_exclusion_condition:
         while old_coord_status != success_exclusion_condition:
             old_coord = old_coord + max_movement_mag * unit_inside_pointing_vector
@@ -487,7 +510,8 @@ def determine_volume_exclusion_effects(
                 old_coord, polygon, min_x, max_x, min_y, max_y
             )
 
-    # if we have reached here, then we know that the old_coord is in the polygon, and the new coord is not in the polygon
+    # if we have reached here, then we know that the old_coord is in the
+    # polygon, and the new coord is not in the polygon
     a = old_coord
     b = new_coord
     np.zeros(2, dtype=np.float64)

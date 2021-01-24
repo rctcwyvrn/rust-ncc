@@ -86,7 +86,6 @@ fn gen_default_char_quants() -> CharQuantities {
         k_mem_on: Tinv(0.02),
         kgtp: Tinv(1e-4),
         kdgtp: Tinv(1e-4),
-        frac_rgtp: 0.1,
     }
 }
 
@@ -104,14 +103,38 @@ fn gen_default_raw_params(
         / Time(1.0).g())
     .to_diffusion()
     .unwrap();
+    let mut specific_rac = [false; NVERTS];
+    specific_rac.iter_mut().enumerate().for_each(|(i, x)| {
+        if i < 4 {
+            *x = true;
+        }
+    });
+    let mut specific_rho = [false; NVERTS];
+    specific_rho.iter_mut().enumerate().for_each(|(i, x)| {
+        if 8 <= i && i < 12 {
+            *x = true;
+        }
+    });
     let init_rac = RgtpDistribution::generate(
         DistributionScheme {
             frac: 0.1,
-            ty: DistributionType::Random,
+            ty: DistributionType::Specific(specific_rac),
         },
         DistributionScheme {
             frac: 0.1,
-            ty: DistributionType::Random,
+            ty: DistributionType::Specific(specific_rac),
+        },
+        rng,
+    )
+    .unwrap();
+    let init_rho = RgtpDistribution::generate(
+        DistributionScheme {
+            frac: 0.1,
+            ty: DistributionType::Specific(specific_rho),
+        },
+        DistributionScheme {
+            frac: 0.1,
+            ty: DistributionType::Specific(specific_rho),
         },
         rng,
     )
@@ -124,7 +147,7 @@ fn gen_default_raw_params(
         halfmax_rgtp_frac: 0.4,
         lm_ss: Stress(10.0).kilo(),
         rho_friction: 0.2,
-        stiffness_ctyo: Force(1e-7),
+        stiffness_cyto: Force(1e-5),
         diffusion_rgtp: rgtp_d,
         tot_rac: 2.5e6,
         tot_rho: 1e6,
@@ -144,7 +167,7 @@ fn gen_default_raw_params(
         rand_mag: 10.0,
         rand_vs: 0.25,
         init_rac,
-        init_rho: init_rac,
+        init_rho,
     }
 }
 
@@ -162,6 +185,7 @@ fn gen_default_phys_contact_dist() -> Length {
     Length(0.5).micro()
 }
 
+#[allow(unused)]
 fn gen_default_adhesion_mag(
     char_quants: &CharQuantities,
     multiplier: f32,

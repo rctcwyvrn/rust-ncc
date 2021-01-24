@@ -25,7 +25,9 @@ def is_numeric(s):
     except ValueError:
         return False
 
-#@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
+
+
 def make_node_coords_array_given_xs_and_ys(num_nodes, xs, ys):
     node_coords = np.empty((num_nodes, 2), dtype=np.float64)
 

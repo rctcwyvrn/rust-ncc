@@ -147,7 +147,7 @@ pub fn calc_conc_rgtps(
     r
 }
 
-//TODO(ES): make this better.
+//TODO(ES): make the documentation for this better.
 /// Calculates Rac1 activation rates, as discussed in SI.
 pub fn calc_kgtps_rac(
     rac_acts: &[f32; NVERTS],

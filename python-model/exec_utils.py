@@ -13,18 +13,24 @@ import parameterorg
 
 # ========================================================================
 
-def get_environment_directory_path(experiment_directory_path, environment_name):
+
+def get_environment_directory_path(
+        experiment_directory_path,
+        environment_name):
     return os.path.join(experiment_directory_path, environment_name)
 
 # ========================================================================
 
+
 def determine_environment_name_and_dir(
     repeat_number, experiment_directory, template_experiment_name_format_string
 ):
-    environment_name = template_experiment_name_format_string.format(repeat_number)
+    environment_name = template_experiment_name_format_string.format(
+        repeat_number)
     environment_dir = os.path.join(experiment_directory, environment_name)
 
     return environment_name, environment_dir
+
 
 def create_environment(
         justify_parameters,

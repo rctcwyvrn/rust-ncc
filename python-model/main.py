@@ -1,7 +1,11 @@
 import experiment_templates as ets
 import writer as fw
 
-fw.remake_write_file()
+TIME_IN_HOURS = 0.01
+NUM_CELLS = 2
+BOX_WIDTH = 2
+BOX_HEIGHT = 1
+fw.remake_write_file(int((TIME_IN_HOURS * 3600) / 2), NUM_CELLS)
 
 closeness_dist_squared_criteria = 0.5e-6 ** 2
 
@@ -91,7 +95,15 @@ parameter_dict.update(
 
 sub_experiment_number = 0
 
-coa_dict = {49: 8.0, 36: 9.0, 25: 12.0, 16: 14.0, 9: 16.0, 4: 24.0, 2: 24.0, 1: 24.0}
+coa_dict = {
+    49: 8.0,
+    36: 9.0,
+    25: 12.0,
+    16: 14.0,
+    9: 16.0,
+    4: 24.0,
+    2: 24.0,
+    1: 24.0}
 
 if __name__ == "__main__":
     uniform_initial_polarization = False
@@ -114,19 +126,18 @@ if __name__ == "__main__":
         parameter_dict,
         uniform_initial_polarization=False,
         no_randomization=True,
-        base_output_dir="/python-model/output",
-        total_time_in_hours=3.0,
+        total_time_in_hours=TIME_IN_HOURS,
         timestep_length=2,
         integration_params=integration_params,
         allowed_drift_before_geometry_recalc=allowed_drift_before_geometry_recalc,
         default_coa=24.0,
         default_cil=60.0,
         num_experiment_repeats=1,
-        box_width=2,
-        box_height=1,
-        num_cells=2,
+        box_width=BOX_WIDTH,
+        box_height=BOX_HEIGHT,
+        num_cells=NUM_CELLS,
         biased_rgtpase_distrib_defn_dict={
-            "default": ["biased nodes", [0, 1, 2, 3], 0.3]
+            "default": ["biased nodes", [0, 1, 2, 3], 0.1]
         },
         justify_parameters=True,
     )

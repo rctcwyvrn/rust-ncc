@@ -1,11 +1,9 @@
 use crate::cell::chemistry::{
-    calc_conc_rgtps, calc_kdgtps_rac, calc_kdgtps_rho,
-    calc_kgtps_rac, calc_kgtps_rho, calc_net_fluxes, RacRandState,
-    RgtpDistribution,
+    calc_conc_rgtps, calc_kdgtps_rac, calc_kdgtps_rho, calc_kgtps_rac,
+    calc_kgtps_rho, calc_net_fluxes, RacRandState, RgtpDistribution,
 };
 use crate::cell::mechanics::{
-    calc_cyto_forces, calc_edge_forces, calc_edge_vecs,
-    calc_rgtp_forces,
+    calc_cyto_forces, calc_edge_forces, calc_edge_vecs, calc_rgtp_forces,
 };
 use crate::interactions::{Interactions, RelativeRgtpActivity};
 use crate::math::v2d::V2D;
@@ -22,9 +20,7 @@ use std::ops::{Add, Div, Mul, Sub};
 /// geometric updates. That is, they are modelled using ODEs which
 /// are then integrated using either the Euler method or
 /// Runge-Kutta Dormand-Prince 5 (Matlab's `ode45`).
-#[derive(
-    Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq,
-)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct CoreState {
     /// Polygon representing cell shape.
     pub poly: [V2D; NVERTS],
@@ -151,9 +147,7 @@ impl Mul<CoreState> for f32 {
 }
 
 /// Records the mechanical state of a cell.
-#[derive(
-    Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq,
-)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct MechState {
     /// Strain each edge is under, where resting edge length is
     /// defined in the cell's parameters.
@@ -177,16 +171,14 @@ pub struct MechState {
 ///     * `kdgtp_X`: Rho GTPase inactivation rates
 ///     * `kgtp_X`: Rho GTPase activation rates
 ///     * `X_act_net_fluxes`: diffusion fluxes between vertices of
-/// active form of Rho GTPases
+/// active form of Rho GTPase
 ///     * `X_inact_net_fluxes`: diffusion fluxes between vertices of
-/// inactive form of Rho GTPases
+/// inactive form of Rho GTPase
 ///     * `X_cyto`: fraction of Rho GTPase in the cytoplasm
 ///     * `x_tens`: "tension" factor that affects Rac1 activation
 /// rate, calculated based on average tensile strain in cell (i.e.
 /// how stretched the cell is).
-#[derive(
-    Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq,
-)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ChemState {
     pub kdgtps_rac: [f32; NVERTS],
     pub kgtps_rac: [f32; NVERTS],
@@ -199,11 +191,13 @@ pub struct ChemState {
     pub rho_act_net_fluxes: [f32; NVERTS],
     pub rho_inact_net_fluxes: [f32; NVERTS],
     pub x_tens: f32,
+    pub conc_rac_acts: [f32; 16],
+    pub conc_rac_inacts: [f32; 16],
+    pub conc_rho_acts: [f32; 16],
+    pub conc_rho_inacts: [f32; 16],
 }
 
-#[derive(
-    Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq,
-)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct GeomState {
     /// Unit edge vectors which point from position of vertex `vi`
     /// to position of vertex `vi + 1`, where `vi + 1` is calculated
@@ -244,7 +238,7 @@ pub fn fmt_var_arr<T: fmt::Display>(
 impl Display for CoreState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // println!("----------");
-        fmt_var_arr(f, "vertex_coords", &self.poly)?;
+        fmt_var_arr(f, "poly", &self.poly)?;
         fmt_var_arr(f, "rac_acts", &self.rac_acts)?;
         fmt_var_arr(f, "rac_inacts", &self.rac_inacts)?;
         fmt_var_arr(f, "rho_acts", &self.rho_acts)?;
@@ -346,26 +340,22 @@ impl CoreState {
             &self.poly,
             &uivs,
             parameters.rest_area,
-            parameters.stiffness_ctyo,
+            parameters.stiffness_cyto,
         );
         // Calculate strain in each edge.
         let mut edge_strains = [0.0_f32; NVERTS];
         (0..NVERTS).for_each(|i| {
-            edge_strains[i] =
-                (edge_lens[i] / parameters.rest_edge_len) - 1.0
+            edge_strains[i] = (edge_lens[i] / parameters.rest_edge_len) - 1.0
         });
-        let edge_forces = calc_edge_forces(
-            &edge_strains,
-            uevs,
-            parameters.stiffness_edge,
-        );
+        let edge_forces =
+            calc_edge_forces(&edge_strains, uevs, parameters.stiffness_edge);
         // If strain is positive (tensile), then consider it in this
         // averaging, otherwise don't. This is because I'm assuming
         // that compression does not have an effect on Rac1 activity.
         // Only tension is considered to have an effect (see refs. in
         // SI.
         //TODO(BM): what is the latest on this front? Recent paper
-        // (Elife?) which suggests not true for migrating cells.
+        // (ELife?) which suggests not true for migrating cells.
         let avg_tens_strain = edge_strains
             .iter()
             .map(|&es| if es < 0.0 { 0.0 } else { es })
@@ -374,9 +364,8 @@ impl CoreState {
         // Sum of all the non-adhesive forces acting on the cell.
         let mut sum_fs = [V2D::default(); NVERTS];
         (0..NVERTS).for_each(|i| {
-            sum_fs[i] =
-                rgtp_forces[i] + cyto_forces[i] + edge_forces[i]
-                    - edge_forces[circ_ix_minus(i, NVERTS)];
+            sum_fs[i] = rgtp_forces[i] + cyto_forces[i] + edge_forces[i]
+                - edge_forces[circ_ix_minus(i, NVERTS)];
         });
         MechState {
             edge_strains,
@@ -399,7 +388,7 @@ impl CoreState {
         let GeomState { edge_lens, .. } = geom_state;
         // Need to calculate average length of edges meeting at
         // a vertex in order to roughly approximate diffusion related
-        // flux of Rho GTPases from neighbouring vertices. Provides
+        // flux of Rho GTPase from neighbouring vertices. Provides
         // an approximation for the length of the membrane abstracted
         // by the edges that meet at that vertex.
         let mut avg_edge_lens: [f32; NVERTS] = [0.0_f32; NVERTS];
@@ -410,14 +399,10 @@ impl CoreState {
 
         // Concentration of Rho GTPase (active/inactive), used to
         // calculate diffusive flux between vertices.
-        let conc_rac_acts =
-            calc_conc_rgtps(&avg_edge_lens, &self.rac_acts);
-        let conc_rac_inacts =
-            calc_conc_rgtps(&avg_edge_lens, &self.rac_inacts);
-        let conc_rho_acts =
-            calc_conc_rgtps(&avg_edge_lens, &self.rho_acts);
-        let conc_rho_inacts =
-            calc_conc_rgtps(&avg_edge_lens, &self.rho_inacts);
+        let conc_rac_acts = calc_conc_rgtps(&avg_edge_lens, &self.rac_acts);
+        let conc_rac_inacts = calc_conc_rgtps(&avg_edge_lens, &self.rac_inacts);
+        let conc_rho_acts = calc_conc_rgtps(&avg_edge_lens, &self.rho_acts);
+        let conc_rho_inacts = calc_conc_rgtps(&avg_edge_lens, &self.rho_inacts);
 
         let kgtps_rac = calc_kgtps_rac(
             &self.rac_acts,
@@ -493,9 +478,13 @@ impl CoreState {
             x_tens,
             kdgtps_rac,
             kgtps_rac,
+            conc_rac_acts,
             rac_act_net_fluxes,
+            conc_rac_inacts,
             rac_inact_net_fluxes,
+            conc_rho_acts,
             rho_act_net_fluxes,
+            conc_rho_inacts,
             rho_inact_net_fluxes,
             kdgtps_rho,
             kgtps_rho,
@@ -508,7 +497,7 @@ impl CoreState {
     /// vertex motion and biochemistry. In particular, calculate
     /// `(delta(state)/delta(t))`. Note that `delta(state)` should have
     /// "units" of `[CoreState]` (the units of the result of
-    /// addition/subtraction of two quanties with units X, is X), so
+    /// addition/subtraction of two quantities with units X, is X), so
     /// this function should be returning a quantity with units
     /// `[CoreState]/[Time]`, but since time is normalized, this is
     /// the same as having units of `[CoreState]`.
@@ -520,8 +509,7 @@ impl CoreState {
         parameters: &Parameters,
     ) -> CoreState {
         let geom_state = Self::calc_geom_state(state);
-        let mech_state =
-            Self::calc_mech_state(state, &geom_state, parameters);
+        let mech_state = Self::calc_mech_state(state, &geom_state, parameters);
         let chem_state = Self::calc_chem_state(
             state,
             &geom_state,
@@ -533,49 +521,35 @@ impl CoreState {
         let mut delta = CoreState::default();
         for i in 0..NVERTS {
             // rate of rac deactivation * current fraction of rac active
-            let inactivated_rac =
-                chem_state.kdgtps_rac[i] * state.rac_acts[i];
-            let activated_rac =
-                chem_state.kgtps_rac[i] * state.rac_inacts[i];
+            let inactivated_rac = chem_state.kdgtps_rac[i] * state.rac_acts[i];
+            let activated_rac = chem_state.kgtps_rac[i] * state.rac_inacts[i];
             let delta_rac_activated = activated_rac - inactivated_rac;
             let rac_cyto_exchange = {
                 let rac_mem_on =
                     parameters.k_mem_on_vertex * chem_state.rac_cyto;
-                let rac_mem_off =
-                    parameters.k_mem_off * state.rac_inacts[i];
+                let rac_mem_off = parameters.k_mem_off * state.rac_inacts[i];
                 rac_mem_on - rac_mem_off
             };
-            let vertex_rac_act_flux =
-                chem_state.rac_act_net_fluxes[i];
-            let vertex_rac_inact_flux =
-                chem_state.rac_inact_net_fluxes[i];
-            delta.rac_acts[i] =
-                delta_rac_activated + vertex_rac_act_flux;
-            delta.rac_inacts[i] = rac_cyto_exchange
-                + vertex_rac_inact_flux
-                - delta_rac_activated;
+            let vertex_rac_act_flux = chem_state.rac_act_net_fluxes[i];
+            let vertex_rac_inact_flux = chem_state.rac_inact_net_fluxes[i];
+            delta.rac_acts[i] = delta_rac_activated + vertex_rac_act_flux;
+            delta.rac_inacts[i] =
+                rac_cyto_exchange + vertex_rac_inact_flux - delta_rac_activated;
 
-            let inactivated_rho =
-                chem_state.kdgtps_rho[i] * state.rho_acts[i];
-            let activated_rho =
-                chem_state.kgtps_rho[i] * state.rho_inacts[i];
+            let inactivated_rho = chem_state.kdgtps_rho[i] * state.rho_acts[i];
+            let activated_rho = chem_state.kgtps_rho[i] * state.rho_inacts[i];
             let delta_rho_activated = activated_rho - inactivated_rho;
             let rho_cyto_exchange = {
                 let rho_mem_on =
                     parameters.k_mem_on_vertex * chem_state.rho_cyto;
-                let rho_mem_off =
-                    parameters.k_mem_off * state.rho_inacts[i];
+                let rho_mem_off = parameters.k_mem_off * state.rho_inacts[i];
                 rho_mem_on - rho_mem_off
             };
-            let vertex_rho_act_flux =
-                chem_state.rho_act_net_fluxes[i];
-            let vertex_rho_inact_flux =
-                chem_state.rho_inact_net_fluxes[i];
-            delta.rho_acts[i] =
-                delta_rho_activated + vertex_rho_act_flux;
-            delta.rho_inacts[i] = rho_cyto_exchange
-                + vertex_rho_inact_flux
-                - delta_rho_activated;
+            let vertex_rho_act_flux = chem_state.rho_act_net_fluxes[i];
+            let vertex_rho_inact_flux = chem_state.rho_inact_net_fluxes[i];
+            delta.rho_acts[i] = delta_rho_activated + vertex_rho_act_flux;
+            delta.rho_inacts[i] =
+                rho_cyto_exchange + vertex_rho_inact_flux - delta_rho_activated;
             delta.poly[i] = (1.0 / world_parameters.vertex_eta)
                 * (mech_state.sum_forces[i] + inter_state.x_adhs[i]);
         }
@@ -702,14 +676,10 @@ impl CoreState {
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].max(&other.poly[i]);
-            rac_acts[i] =
-                max_f32(self.rac_acts[i], other.rac_acts[i]);
-            rac_inacts[i] =
-                max_f32(self.rac_inacts[i], other.rac_inacts[i]);
-            rho_acts[i] =
-                max_f32(self.rho_acts[i], other.rho_acts[i]);
-            rho_inacts[i] =
-                max_f32(self.rho_inacts[i], other.rho_inacts[i]);
+            rac_acts[i] = max_f32(self.rac_acts[i], other.rac_acts[i]);
+            rac_inacts[i] = max_f32(self.rac_inacts[i], other.rac_inacts[i]);
+            rho_acts[i] = max_f32(self.rho_acts[i], other.rho_acts[i]);
+            rho_inacts[i] = max_f32(self.rho_inacts[i], other.rho_inacts[i]);
         }
 
         CoreState {
@@ -730,14 +700,10 @@ impl CoreState {
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].min(&other.poly[i]);
-            rac_acts[i] =
-                min_f32(self.rac_acts[i], other.rac_acts[i]);
-            rac_inacts[i] =
-                min_f32(self.rac_inacts[i], other.rac_inacts[i]);
-            rho_acts[i] =
-                min_f32(self.rho_acts[i], other.rho_acts[i]);
-            rho_inacts[i] =
-                min_f32(self.rho_inacts[i], other.rho_inacts[i]);
+            rac_acts[i] = min_f32(self.rac_acts[i], other.rac_acts[i]);
+            rac_inacts[i] = min_f32(self.rac_inacts[i], other.rac_inacts[i]);
+            rho_acts[i] = min_f32(self.rho_acts[i], other.rho_acts[i]);
+            rho_inacts[i] = min_f32(self.rho_inacts[i], other.rho_inacts[i]);
         }
 
         CoreState {
@@ -780,13 +746,11 @@ impl CoreState {
             .enumerate()
             .for_each(|(ix, (&rac, &rho))| {
                 r[ix] = RelativeRgtpActivity::from_f32(
-                    hill_function3(
-                        parameters.halfmax_vertex_rgtp_act,
-                        rac,
-                    ) - hill_function3(
-                        parameters.halfmax_vertex_rgtp_act,
-                        rho,
-                    ),
+                    hill_function3(parameters.halfmax_vertex_rgtp_act, rac)
+                        - hill_function3(
+                            parameters.halfmax_vertex_rgtp_act,
+                            rho,
+                        ),
                 );
             });
         r

@@ -13,11 +13,9 @@ pub mod rkdp5;
 
 use crate::cell::chemistry::RacRandState;
 use crate::cell::rkdp5::AuxArgs;
-use crate::cell::states::{
-    ChemState, CoreState, GeomState, MechState,
-};
+use crate::cell::states::{ChemState, CoreState, GeomState, MechState};
 use crate::interactions::{ContactData, Interactions};
-use crate::math::geometry::{calc_poly_area, LineSeg2D};
+use crate::math::geometry::{calc_poly_area, check_strong_intersection};
 use crate::math::v2d::V2D;
 use crate::parameters::{Parameters, WorldParameters};
 use crate::utils::pcg32::Pcg32;
@@ -29,15 +27,13 @@ use std::fs::File;
 use std::io::Write;
 
 /// Cell state structure.
-#[derive(
-    Copy, Clone, Deserialize, Serialize, PartialEq, Default, Debug,
-)]
+#[derive(Copy, Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cell {
     /// Index of cell within world.
     pub ix: usize,
     /// Index of group that cell belongs to.
     pub group_ix: usize,
-    /// Core state of the cell (position, Rho GTPases).
+    /// Core state of the cell (position, Rho GTPase).
     pub core: CoreState,
     /// Random Rac1 activity.
     pub rac_rand: RacRandState,
@@ -55,14 +51,13 @@ pub fn violates_volume_exclusion(
     test_w: &V2D,
     contacts: &[ContactData],
 ) -> bool {
-    let lsegs = [
-        LineSeg2D::new(test_u, test_v),
-        LineSeg2D::new(test_v, test_w),
-    ];
-    for lseg in lsegs.iter() {
+    let point_pairs = [(test_u, test_v), (test_v, test_w)];
+    for (p0, p1) in point_pairs.iter() {
         for cd in contacts.iter() {
-            if lseg.check_poly_intersect(&cd.poly) {
-                return true;
+            for edge in cd.poly.edges.iter() {
+                if check_strong_intersection(p0, p1, edge) {
+                    return true;
+                }
             }
         }
     }
@@ -80,8 +75,7 @@ fn move_point_out(
     let mut n = 0;
     while n < num_iters {
         let test_v = 0.5 * (good_v + new_v);
-        if violates_volume_exclusion(&test_v, new_u, new_w, contacts)
-        {
+        if violates_volume_exclusion(&test_v, new_u, new_w, contacts) {
             new_v = test_v;
         } else {
             good_v = test_v;
@@ -131,9 +125,8 @@ pub fn enforce_volume_exclusion(
         let new_v = new_vs[vi];
         let new_u = new_vs[circ_ix_minus(vi, NVERTS)];
         let new_w = new_vs[circ_ix_plus(vi, NVERTS)];
-        new_vs[vi] = move_point_out(
-            &new_u, new_v, &new_w, old_v, &contacts, 20,
-        );
+        new_vs[vi] =
+            move_point_out(&new_u, new_v, &new_w, old_v, &contacts, 20);
     }
 
     #[cfg(feature = "validate")]
@@ -183,6 +176,7 @@ impl Cell {
     pub fn simulate_euler(
         &self,
         tstep: u32,
+        n_int_steps: u32,
         interactions: &Interactions,
         contact_data: Vec<ContactData>,
         world_parameters: &WorldParameters,
@@ -191,24 +185,13 @@ impl Cell {
         out_file: &mut File,
     ) -> Result<Cell, String> {
         let mut state = self.core;
-        let nsteps: u32 = 10;
         // Assumed normalized time by time provided in CharQuant.
         // Therefore, we can take the time period to integrate over
         // as 1.0.
-        let dt = 1.0 / (nsteps as f32);
-        for _ in 0..nsteps {
-            // d(state)/dt = dynamics_f(state) <- calculate RHS of ODE
-            let delta = CoreState::dynamics_f(
-                &state,
-                &self.rac_rand,
-                &interactions,
-                world_parameters,
-                parameters,
-            );
-            state = state + dt * delta;
+        let dt = 1.0 / (n_int_steps as f32);
+        for _ in 0..n_int_steps {
             let geom_state = state.calc_geom_state();
-            let mech_state =
-                state.calc_mech_state(&geom_state, parameters);
+            let mech_state = state.calc_mech_state(&geom_state, parameters);
             let chem_state = state.calc_chem_state(
                 &geom_state,
                 &mech_state,
@@ -216,13 +199,10 @@ impl Cell {
                 &interactions,
                 parameters,
             );
-
-            writeln!(out_file, "++++++++++++++++++++++++++++++")
-                .unwrap();
-            writeln!(out_file, "ci: {}", self.ix).unwrap();
+            writeln!(out_file, "------------------------------").unwrap();
             writeln!(
                 out_file,
-                "vertex_coords: [{}]",
+                "poly: [{}]",
                 state
                     .poly
                     .iter()
@@ -280,6 +260,17 @@ impl Cell {
                 "tot_forces: [{}]",
                 mech_state
                     .sum_forces
+                    .iter()
+                    .map(|p| format!("[{}, {}]", p.x, p.y))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "uivs: [{}]",
+                geom_state
+                    .unit_inward_vecs
                     .iter()
                     .map(|p| format!("[{}, {}]", p.x, p.y))
                     .collect::<Vec<String>>()
@@ -363,12 +354,81 @@ impl Cell {
                     .join(", ")
             )
             .unwrap();
-            writeln!(out_file, "++++++++++++++++++++++++++++++")
-                .unwrap();
+            writeln!(
+                out_file,
+                "conc_rac_acts: [{}]",
+                chem_state
+                    .conc_rac_acts
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "x_cils: [{}]",
+                interactions
+                    .x_cils
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "x_coas: [{}]",
+                interactions
+                    .x_coas
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "rac_act_net_fluxes: [{}]",
+                chem_state
+                    .rac_act_net_fluxes
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "edge_strains: [{}]",
+                mech_state
+                    .edge_strains
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(
+                out_file,
+                "poly_area: [{}]",
+                vec![calc_poly_area(&state.poly).to_string(); NVERTS]
+                    .join(", ")
+            )
+            .unwrap();
+            writeln!(out_file, "------------------------------").unwrap();
+            // d(state)/dt = dynamics_f(state) <- calculate RHS of ODE
+            let delta = CoreState::dynamics_f(
+                &state,
+                &self.rac_rand,
+                &interactions,
+                world_parameters,
+                parameters,
+            );
+            state = state + dt * delta;
         }
         let geom_state = state.calc_geom_state();
-        let mech_state =
-            state.calc_mech_state(&geom_state, parameters);
+        let mech_state = state.calc_mech_state(&geom_state, parameters);
         let chem_state = state.calc_chem_state(
             &geom_state,
             &mech_state,
@@ -427,8 +487,7 @@ impl Cell {
         let mut state =
             result.y.expect("rkdp5 integrator: too many iterations!");
         let geom_state = state.calc_geom_state();
-        let mech_state =
-            state.calc_mech_state(&geom_state, parameters);
+        let mech_state = state.calc_mech_state(&geom_state, parameters);
         let chem_state = state.calc_chem_state(
             &geom_state,
             &mech_state,
@@ -436,12 +495,9 @@ impl Cell {
             &interactions,
             parameters,
         );
-        state.poly = enforce_volume_exclusion(
-            &self.core.poly,
-            state.poly,
-            contact_data,
-        )
-        .map_err(|e| format!("ci={}\n{}", self.ix, e))?;
+        state.poly =
+            enforce_volume_exclusion(&self.core.poly, state.poly, contact_data)
+                .map_err(|e| format!("ci={}\n{}", self.ix, e))?;
         let geom_state = state.calc_geom_state();
 
         #[cfg(feature = "validate")]

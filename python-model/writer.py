@@ -1,9 +1,13 @@
 import os
 
-WRITE_FILE_PATH = "../model-comparison/py-out/out_euler.dat"
+WRITE_FILE_PATH_TEMPLATE = \
+    "B:\\rust-ncc\\model-comparison\\py-out\\out_euler_T={}_NC={}.dat"
+WRITE_FILE_PATH = ""
 
 
-def remake_write_file():
+def remake_write_file(tsteps, num_cells):
+    global WRITE_FILE_PATH
+    WRITE_FILE_PATH = WRITE_FILE_PATH_TEMPLATE.format(tsteps, num_cells)
     if os.path.exists(WRITE_FILE_PATH):
         os.remove(WRITE_FILE_PATH)
     f = open(WRITE_FILE_PATH, "a")

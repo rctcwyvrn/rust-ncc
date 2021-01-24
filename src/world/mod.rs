@@ -25,7 +25,6 @@ use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cells {
@@ -37,6 +36,7 @@ impl Cells {
     fn simulate(
         &self,
         tstep: u32,
+        n_int_steps: u32,
         rng: &mut Pcg32,
         world_parameters: &WorldParameters,
         group_parameters: &[Parameters],
@@ -50,18 +50,18 @@ impl Cells {
             crs.shuffle(rng);
             crs
         };
+        writeln!(out_file, "==============================").unwrap();
         for cell_state in shuffled_cells {
             let ci = cell_state.ix;
             let contact_data =
                 interaction_generator.get_contact_data(ci);
 
-            writeln!(
-                out_file,
-                "======================================"
-            )
-            .unwrap();
+            writeln!(out_file, "++++++++++++++++++++++++++++++")
+                .unwrap();
+            writeln!(out_file, "ci: {}", ci).unwrap();
             let new_cell_state = cell_state.simulate_euler(
                 tstep,
+                n_int_steps,
                 &self.interactions[ci],
                 contact_data,
                 world_parameters,
@@ -69,11 +69,8 @@ impl Cells {
                 rng,
                 out_file,
             )?;
-            writeln!(
-                out_file,
-                "======================================"
-            )
-            .unwrap();
+            writeln!(out_file, "++++++++++++++++++++++++++++++")
+                .unwrap();
 
             interaction_generator
                 .update(ci, &new_cell_state.core.poly);
@@ -87,6 +84,7 @@ impl Cells {
 
             new_cell_states[ci] = new_cell_state;
         }
+        writeln!(out_file, "==============================").unwrap();
         let rel_rgtps = new_cell_states
             .iter()
             .map(|c| {
@@ -133,7 +131,6 @@ pub struct World {
     cells: Cells,
     interaction_generator: InteractionGenerator,
     pub rng: Pcg32,
-    pub output_file: PathBuf,
 }
 
 fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
@@ -150,10 +147,7 @@ fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
 }
 
 impl World {
-    pub fn new(
-        experiment: Experiment,
-        output_file: PathBuf,
-    ) -> World {
+    pub fn new(experiment: Experiment) -> World {
         // Unpack relevant info from `Experiment` data structure.
         let Experiment {
             char_quants,
@@ -169,7 +163,7 @@ impl World {
             .map(|cg| cg.parameters.clone())
             .collect::<Vec<Parameters>>();
 
-        // Create a list of indices of the groups. and reate a vector
+        // Create a list of indices of the groups and create a vector
         // of the cell centroids in each group.
         let mut cell_group_ixs = vec![];
         let mut cell_centroids = vec![];
@@ -200,7 +194,7 @@ impl World {
                 )
             })
             .collect::<Vec<CoreState>>();
-        // Calcualte relative activity of Rac1 vs. RhoA at a node.
+        // Calculate relative activity of Rac1 vs. RhoA at a node.
         // This is needed for CRL.
         let cell_rgtps = cell_group_ixs
             .iter()
@@ -251,7 +245,6 @@ impl World {
             cells,
             interaction_generator,
             rng,
-            output_file,
         }
     }
 
@@ -270,13 +263,25 @@ impl World {
             .create(true)
             .truncate(true)
             .write(true)
-            .open(&self.output_file)
+            .open(format!(
+                "B:\\rust-ncc\\model-comparison\\rust-out\\out_euler_T={}_NC={}.dat",
+                num_tsteps,
+                self.cells.states.len()
+            ))
             .unwrap();
+        let n_int_steps = 10;
+        writeln!(f, "******************************").unwrap();
+        writeln!(f, "num_tsteps: {}", num_tsteps).unwrap();
+        writeln!(f, "num_cells: {}", self.cells.states.len())
+            .unwrap();
+        writeln!(f, "num_int_steps: {}", n_int_steps).unwrap();
+        writeln!(f, "******************************").unwrap();
         while self.tstep < num_tsteps {
             let new_cells: Cells = self
                 .cells
                 .simulate(
                     self.tstep,
+                    n_int_steps,
                     &mut self.rng,
                     &self.world_params,
                     &self.group_params,

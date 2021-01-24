@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::math::radians::{arctan, Radians};
-use crate::math::{max_f32, min_f32};
+use crate::math::{close_to_zero, max_f32, min_f32};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Display;
@@ -15,9 +15,7 @@ use std::fmt::Write;
 use std::ops::{Add, Div, Mul, Sub};
 
 /// 2D vector with `f32` elements.
-#[derive(
-    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq,
-)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct V2D {
     pub x: f32,
     pub y: f32,
@@ -126,6 +124,11 @@ impl V2D {
     #[inline]
     pub fn zeros() -> V2D {
         V2D::default()
+    }
+
+    #[inline]
+    pub fn close_to(&self, other: &V2D) -> bool {
+        close_to_zero(self.x - other.x) && close_to_zero(self.y - other.y)
     }
 }
 
