@@ -366,14 +366,14 @@ def calculate_coa_signals(
                     dist_squared_between_nodes = \
                         relevant_dist_squared_slice[other_ni]
 
-                    print("====================")
-                    print("(ci: {}, vi: {}, ovi: {}, oci: {}):".format(
-                        this_cell_index, ni, other_ci, other_ni))
-                    print("dist: {}".format(np.sqrt(dist_squared_between_nodes)))
-                    print("num_intersects: {}".format(
-                        line_segment_between_node_intersects_polygon))
-                    print("los_factor: {}".format(
-                        intersection_factor))
+                    # print("====================")
+                    # print("(ci: {}, vi: {}, ovi: {}, oci: {}):".format(
+                    #     this_cell_index, ni, other_ci, other_ni))
+                    # print("dist: {}".format(np.sqrt(dist_squared_between_nodes)))
+                    # print("num_intersects: {}".format(
+                    #     line_segment_between_node_intersects_polygon))
+                    # print("los_factor: {}".format(
+                    #     intersection_factor))
 
                     coa_signal = 0.0
                     if dist_squared_between_nodes > too_close_dist_squared:
@@ -386,11 +386,11 @@ def calculate_coa_signals(
                         )
                     old_coa_signal = this_node_coa_signal
                     this_node_coa_signal += coa_signal * signal_strength
-                    print("coa_signal: {}".format(coa_signal))
-                    print("signal_strength: {}".format(signal_strength))
-                    print(
-                        "new = {} + {}".format(old_coa_signal,
-                                               coa_signal * signal_strength))
+                    # print("coa_signal: {}".format(coa_signal))
+                    # print("signal_strength: {}".format(signal_strength))
+                    # print(
+                    #     "new = {} + {}".format(old_coa_signal,
+                    #                            coa_signal * signal_strength))
 
 
         coa_signals[ni] = this_node_coa_signal

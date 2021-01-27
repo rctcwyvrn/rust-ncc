@@ -1217,12 +1217,12 @@ class Cell:
         dynamics.print_var = True
 
         if not self.skip_dynamics:
-            L_squared = self.L ** 2
-            intercellular_squared_dist_array = (
-                intercellular_squared_dist_array / L_squared
-            )
-            all_cells_node_coords = all_cells_node_coords / self.L
-            all_cells_node_forces = all_cells_node_forces / self.ML_T2
+            # L_squared = self.L ** 2
+            # intercellular_squared_dist_array = (
+            #     intercellular_squared_dist_array / L_squared
+            # )
+            # all_cells_node_coords = all_cells_node_coords / self.L
+            # all_cells_node_forces = all_cells_node_forces / self.ML_T2
 
             num_cells = all_cells_node_coords.shape[0]
 

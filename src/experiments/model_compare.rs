@@ -1,15 +1,14 @@
 use crate::experiments::{
     gen_default_char_quants, gen_default_phys_contact_dist,
-    gen_default_raw_params, gen_default_viscosity, CellGroup,
-    Experiment, GroupBBox,
+    gen_default_raw_params, gen_default_viscosity, CellGroup, Experiment,
+    GroupBBox,
 };
 use crate::interactions::dat_sym2d::SymCcDat;
 use crate::math::v2d::V2D;
 use crate::parameters::quantity::{Length, Quantity};
 use crate::parameters::{
-    CharQuantities, RawCloseBounds, RawCoaParams,
-    RawInteractionParams, RawPhysicalContactParams,
-    RawWorldParameters,
+    CharQuantities, RawCloseBounds, RawCoaParams, RawInteractionParams,
+    RawPhysicalContactParams, RawWorldParameters,
 };
 use crate::utils::pcg32::Pcg32;
 
@@ -73,9 +72,7 @@ fn gen_cil_mat() -> SymCcDat<f32> {
 
 /// Generate raw world parameters, in particular, how
 /// cells interact with each other, and any boundaries.
-fn raw_world_parameters(
-    _char_quants: &CharQuantities,
-) -> RawWorldParameters {
+fn raw_world_parameters(_char_quants: &CharQuantities) -> RawWorldParameters {
     // Some(RawCoaParams {
     //     los_penalty: 2.0,
     //     range: Length(100.0).micro(),
@@ -93,10 +90,7 @@ fn raw_world_parameters(
             chem_attr: None,
             bdry: None,
             phys_contact: RawPhysicalContactParams {
-                range: RawCloseBounds::new(
-                    one_at.mul_number(2.0),
-                    one_at,
-                ),
+                range: RawCloseBounds::new(one_at.mul_number(3.0), one_at),
                 adh_mag: None,
                 cal_mag: None,
                 cil_mag: 60.0,
@@ -118,12 +112,8 @@ pub fn generate(
     let char_quants = gen_default_char_quants();
     let world_parameters =
         raw_world_parameters(&char_quants).refine(&char_quants);
-    let cell_groups = cell_groups(
-        &mut rng,
-        randomization,
-        &char_quants,
-        vec![num_cells],
-    );
+    let cell_groups =
+        cell_groups(&mut rng, randomization, &char_quants, vec![num_cells]);
     Experiment {
         file_name: "n_cells".to_string(),
         char_quants,

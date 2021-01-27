@@ -157,7 +157,7 @@ pub struct LineSeg2D {
     /// First point defining line segment.
     pub p0: V2D,
     /// Second point defining line segment.
-    p1: V2D,
+    pub p1: V2D,
     /// `(p1 - p0)`, the vector generator of the line segment.
     pub vector: V2D,
     /// Bounding box of the segment.

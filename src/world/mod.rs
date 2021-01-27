@@ -14,9 +14,7 @@ use crate::interactions::{
     InteractionGenerator, Interactions, RelativeRgtpActivity,
 };
 use crate::math::v2d::V2D;
-use crate::parameters::{
-    CharQuantities, Parameters, WorldParameters,
-};
+use crate::parameters::{CharQuantities, Parameters, WorldParameters};
 use crate::utils::pcg32::Pcg32;
 use crate::NVERTS;
 use rand::seq::SliceRandom;
@@ -43,21 +41,18 @@ impl Cells {
         interaction_generator: &mut InteractionGenerator,
         out_file: &mut File,
     ) -> Result<Cells, String> {
-        let mut new_cell_states =
-            vec![self.states[0]; self.states.len()];
+        let mut new_cell_states = vec![self.states[0]; self.states.len()];
         let shuffled_cells = {
             let mut crs = self.states.iter().collect::<Vec<&Cell>>();
-            crs.shuffle(rng);
+            // crs.shuffle(rng);
             crs
         };
         writeln!(out_file, "==============================").unwrap();
         for cell_state in shuffled_cells {
             let ci = cell_state.ix;
-            let contact_data =
-                interaction_generator.get_contact_data(ci);
+            let contact_data = interaction_generator.get_contact_data(ci);
 
-            writeln!(out_file, "++++++++++++++++++++++++++++++")
-                .unwrap();
+            writeln!(out_file, "++++++++++++++++++++++++++++++").unwrap();
             writeln!(out_file, "ci: {}", ci).unwrap();
             let new_cell_state = cell_state.simulate_euler(
                 tstep,
@@ -69,11 +64,9 @@ impl Cells {
                 rng,
                 out_file,
             )?;
-            writeln!(out_file, "++++++++++++++++++++++++++++++")
-                .unwrap();
+            writeln!(out_file, "++++++++++++++++++++++++++++++").unwrap();
 
-            interaction_generator
-                .update(ci, &new_cell_state.core.poly);
+            interaction_generator.update(ci, &new_cell_state.core.poly);
 
             #[cfg(feature = "validate")]
             confirm_volume_exclusion(
@@ -88,9 +81,8 @@ impl Cells {
         let rel_rgtps = new_cell_states
             .iter()
             .map(|c| {
-                c.core.calc_relative_rgtp_activity(
-                    &group_parameters[c.group_ix],
-                )
+                c.core
+                    .calc_relative_rgtp_activity(&group_parameters[c.group_ix])
             })
             .collect::<Vec<[RelativeRgtpActivity; NVERTS]>>();
         Ok(Cells {
@@ -169,8 +161,7 @@ impl World {
         let mut cell_centroids = vec![];
         cell_groups.iter().enumerate().for_each(|(gix, cg)| {
             cell_group_ixs.append(&mut vec![gix; cg.num_cells]);
-            cell_centroids
-                .append(&mut gen_cell_centroids(cg).unwrap())
+            cell_centroids.append(&mut gen_cell_centroids(cg).unwrap())
         });
         // Generate the cell polygons from the cell centroid
         // information generated in the last step.
@@ -187,11 +178,7 @@ impl World {
             .zip(cell_polys.iter())
             .map(|(&gix, poly)| {
                 let parameters = &group_params[gix];
-                CoreState::new(
-                    *poly,
-                    parameters.init_rac,
-                    parameters.init_rho,
-                )
+                CoreState::new(*poly, parameters.init_rac, parameters.init_rho)
             })
             .collect::<Vec<CoreState>>();
         // Calculate relative activity of Rac1 vs. RhoA at a node.
@@ -211,13 +198,10 @@ impl World {
             world_params.interactions.clone(),
         );
         // Generate initial cell interactions.
-        let cell_interactions =
-            interaction_generator.generate(&cell_rgtps);
+        let cell_interactions = interaction_generator.generate(&cell_rgtps);
         // Create `Cell` structures to represent each cell, and the random number generator associated per cell.
         let mut cell_states = vec![];
-        for (cell_ix, group_ix) in
-            cell_group_ixs.into_iter().enumerate()
-        {
+        for (cell_ix, group_ix) in cell_group_ixs.into_iter().enumerate() {
             // Parameters that will be used by this cell. Determined
             // by figuring out which group it belongs to, as all cells
             // within a group use the same parameters.
@@ -257,8 +241,7 @@ impl World {
     }
 
     pub fn simulate(&mut self, final_tpoint: f32) {
-        let num_tsteps =
-            (final_tpoint / self.char_quants.time()).ceil() as u32;
+        let num_tsteps = (final_tpoint / self.char_quants.time()).ceil() as u32;
         let mut f = OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -272,8 +255,7 @@ impl World {
         let n_int_steps = 10;
         writeln!(f, "******************************").unwrap();
         writeln!(f, "num_tsteps: {}", num_tsteps).unwrap();
-        writeln!(f, "num_cells: {}", self.cells.states.len())
-            .unwrap();
+        writeln!(f, "num_cells: {}", self.cells.states.len()).unwrap();
         writeln!(f, "num_int_steps: {}", n_int_steps).unwrap();
         writeln!(f, "******************************").unwrap();
         while self.tstep < num_tsteps {

@@ -1,7 +1,7 @@
 import experiment_templates as ets
 import writer as fw
 
-TIME_IN_HOURS = 0.01
+TIME_IN_HOURS = 1.0
 NUM_CELLS = 2
 BOX_WIDTH = 2
 BOX_HEIGHT = 1

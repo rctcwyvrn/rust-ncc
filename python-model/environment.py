@@ -408,11 +408,9 @@ class Environment:
             )
             fw.write(["++++++++++++++++++++++++++++++"])
 
-            if not current_cell.skip_dynamics:
-                this_cell_coords = current_cell.curr_node_coords * \
-                                   current_cell.L
-                this_cell_forces = current_cell.curr_node_forces * \
-                                   current_cell.ML_T2
+            if True:
+                this_cell_coords = current_cell.curr_node_coords
+                this_cell_forces = current_cell.curr_node_forces
 
                 environment_cells_node_coords[ci] = this_cell_coords
                 environment_cells_node_forces[ci] = this_cell_forces
@@ -420,7 +418,7 @@ class Environment:
                 cells_bounding_box_array[
                     ci
                 ] = geometry.calculate_polygon_bounding_box(this_cell_coords)
-                if recalc_geometry[ci]:
+                if True:
                     # cells_node_distance_matrix,
                     # cells_line_segment_intersection_matrix =
                     # geometry.update_line_segment_intersection_and_dist_squared_matrices_old(ci, self.num_cells, self.num_nodes, environment_cells_node_coords, cells_bounding_box_array, cells_node_distance_matrix, cells_line_segment_intersection_matrix)
@@ -431,6 +429,7 @@ class Environment:
                         cells_bounding_box_array,
                         cells_node_distance_matrix,
                         cells_line_segment_intersection_matrix,
+                        sequential=True,
                     )
                 else:
                     geometry.update_distance_squared_matrix(
@@ -475,12 +474,16 @@ class Environment:
         num_nodes = self.num_nodes
 
         environment_cells = self.cells_in_environment
-        environment_cells_node_coords = np.array(
-            [x.curr_node_coords * x.L for x in environment_cells]
-        )
-        environment_cells_node_forces = np.array(
-            [x.curr_node_forces * x.ML_T2 for x in environment_cells]
-        )
+        environment_cells_node_coords = np.array([x.curr_node_coords for x in
+                                                  environment_cells])
+        environment_cells_node_forces = np.array([x.curr_node_forces for x in
+                                                  environment_cells])
+        # environment_cells_node_coords = np.array(
+        #     [x.curr_node_coords * x.L for x in environment_cells]
+        # )
+        # environment_cells_node_forces = np.array(
+        #     [x.curr_node_forces * x.ML_T2 for x in environment_cells]
+        # )
 
         curr_centroids = geometry.calculate_centroids(
             environment_cells_node_coords)
@@ -543,28 +546,29 @@ class Environment:
                     recalc_geometry,
                 )
 
-                prev_centroids = copy.deepcopy(curr_centroids)
-                curr_centroids = geometry.calculate_centroids(
-                    environment_cells_node_coords
-                )
-                delta_drifts = (
-                        geometry.calculate_centroid_dift(
-                            prev_centroids,
-                            curr_centroids) / 1e-6)
-                if np.all(recalc_geometry):
-                    centroid_drifts = np.zeros_like(centroid_drifts)
-                    recalc_geometry = np.zeros_like(recalc_geometry)
-                else:
-                    centroid_drifts = centroid_drifts + delta_drifts
-
-                if np.max(
-                        centroid_drifts) > allowed_drift_before_geometry_recalc:
-                    recalc_geometry = np.ones_like(recalc_geometry)
-                #                    centroid_drifts = np.where(
-                #                    recalc_geometry, 0.0, centroid_drifts +
-                #                    delta_drifts)
-                #                    recalc_geometry = centroid_drifts >
-                #                    allowed_drift_before_geometry_recalc
+                # prev_centroids = copy.deepcopy(curr_centroids)
+                # curr_centroids = geometry.calculate_centroids(
+                #     environment_cells_node_coords
+                # )
+                # delta_drifts = (
+                #         geometry.calculate_centroid_dift(
+                #             prev_centroids,
+                #             curr_centroids) / 1e-6)
+                # if np.all(recalc_geometry):
+                #     centroid_drifts = np.zeros_like(centroid_drifts)
+                #     recalc_geometry = np.zeros_like(recalc_geometry)
+                # else:
+                #     centroid_drifts = centroid_drifts + delta_drifts
+                #
+                # if np.max(
+                #         centroid_drifts) > allowed_drift_before_geometry_recalc:
+                #     recalc_geometry = np.ones_like(recalc_geometry)
+                # #                    centroid_drifts = np.where(
+                # #                    recalc_geometry, 0.0, centroid_drifts +
+                # #                    delta_drifts)
+                # #                    recalc_geometry = centroid_drifts >
+                # #                    allowed_drift_before_geometry_recalc
+                recalc_geometry = np.ones(self.num_cells, dtype=np.bool)
 
                 self.curr_tpoint += 1
         else:
