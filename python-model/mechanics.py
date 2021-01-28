@@ -39,61 +39,37 @@ def calculate_phys_space_bdry_contact_factors(
             this_cell_coords, space_physical_bdry_polygons
         )
 
-
-# -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def calculate_migr_bdry_contact_factors(
-    num_nodes,
-    this_cell_coords,
-    space_migratory_bdry_polygon,
-    migr_bdry_contact_factor_mag,
-):
-
-    are_nodes_in_migr_space = geometry.are_points_inside_polygon(
-        this_cell_coords, space_migratory_bdry_polygon
-    )
-
-    result = np.zeros(num_nodes, dtype=np.float64)
-    for i in range(num_nodes):
-        if are_nodes_in_migr_space[i] == 1:
-            result[i] = 1.0
-        else:
-            result[i] = migr_bdry_contact_factor_mag
-
-    return result
-
-
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_cytoplasmic_force(
-    num_nodes,
+    nverts,
     this_cell_coords,
-    area_resting,
-    stiffness_cytoplasmic,
-    unit_inside_pointing_vectors,
+    rest_area,
+    stiffness_cyto,
+    uivs,
 ):
     current_area = abs(geometry.calculate_polygon_area(this_cell_coords))
 
-    area_strain = (current_area - area_resting) / area_resting
-    force_mag = area_strain * stiffness_cytoplasmic / num_nodes
+    area_strain = (current_area - rest_area) / rest_area
+    force_mag = area_strain * stiffness_cyto / nverts
 
     return geometry.multiply_vectors_by_scalar(
-        unit_inside_pointing_vectors, force_mag
+        uivs, force_mag
     )
 
 
 # -----------------------------------------------------------------
 #@nb.jit(nopython=True)
 def calculate_spring_edge_forces(
-    num_nodes, this_cell_coords, stiffness_edge, length_edge_resting
+    nverts, this_cell_coords, stiffness_edge, rest_edge_len
 ):
 
-    edge_vectors_to_plus = np.empty((num_nodes, 2), dtype=np.float64)
-    edge_vectors_to_minus = np.empty((num_nodes, 2), dtype=np.float64)
+    edge_vectors_to_plus = np.empty((nverts, 2), dtype=np.float64)
+    edge_vectors_to_minus = np.empty((nverts, 2), dtype=np.float64)
 
-    for i in range(num_nodes):
-        i_plus_1 = (i + 1) % num_nodes
-        i_minus_1 = (i - 1) % num_nodes
+    for i in range(nverts):
+        i_plus_1 = (i + 1) % nverts
+        i_minus_1 = (i - 1) % nverts
         edge_vector_to_plus = geometry.calculate_vector_from_p1_to_p2_given_vectors(
             this_cell_coords[i], this_cell_coords[i_plus_1])
         edge_vector_to_minus = geometry.calculate_vector_from_p1_to_p2_given_vectors(
@@ -111,17 +87,17 @@ def calculate_spring_edge_forces(
     minus_dirn_edge_length = geometry.calculate_2D_vector_mags(
         edge_vectors_to_minus)
 
-    edge_strains_plus = np.empty(num_nodes, dtype=np.float64)
-    edge_strains_minus = np.empty(num_nodes, dtype=np.float64)
-    local_average_strains = np.empty(num_nodes, dtype=np.float64)
+    edge_strains_plus = np.empty(nverts, dtype=np.float64)
+    edge_strains_minus = np.empty(nverts, dtype=np.float64)
+    local_average_strains = np.empty(nverts, dtype=np.float64)
 
-    for i in range(num_nodes):
+    for i in range(nverts):
         edge_strain_plus = (
-            plus_dirn_edge_length[i] - length_edge_resting
-        ) / length_edge_resting
+            plus_dirn_edge_length[i] - rest_edge_len
+        ) / rest_edge_len
         edge_strain_minus = (
-            minus_dirn_edge_length[i] - length_edge_resting
-        ) / length_edge_resting
+            minus_dirn_edge_length[i] - rest_edge_len
+        ) / rest_edge_len
 
         edge_strains_plus[i] = edge_strain_plus
         edge_strains_minus[i] = edge_strain_minus
@@ -133,31 +109,31 @@ def calculate_spring_edge_forces(
     unit_edge_disp_vecs_minus = geometry.normalize_vectors(
         edge_vectors_to_minus)
 
-    EFplus_mags = np.zeros(num_nodes, dtype=np.float64)
-    EFminus_mags = np.zeros(num_nodes, dtype=np.float64)
-    for i in range(num_nodes):
-        EFplus_mags[i] = edge_strains_plus[i] * stiffness_edge
-        EFminus_mags[i] = edge_strains_minus[i] * stiffness_edge
+    edge_forces_plus_mags = np.zeros(nverts, dtype=np.float64)
+    edge_forces_minus_mags = np.zeros(nverts, dtype=np.float64)
+    for i in range(nverts):
+        edge_forces_plus_mags[i] = edge_strains_plus[i] * stiffness_edge
+        edge_forces_minus_mags[i] = edge_strains_minus[i] * stiffness_edge
 
-    EFplus = geometry.multiply_vectors_by_scalars(
-        unit_edge_disp_vecs_plus, EFplus_mags)
+    edge_forces_plus = geometry.multiply_vectors_by_scalars(
+        unit_edge_disp_vecs_plus, edge_forces_plus_mags)
 
-    EFminus = geometry.multiply_vectors_by_scalars(
-        unit_edge_disp_vecs_minus, EFminus_mags
+    edge_forces_minus = geometry.multiply_vectors_by_scalars(
+        unit_edge_disp_vecs_minus, edge_forces_minus_mags
     )
 
-    return local_average_strains, EFplus, EFminus, edge_strains_plus
+    return local_average_strains, edge_forces_plus, edge_forces_minus, edge_strains_plus
 
 
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
-def determine_rac_rho_domination(rac_membrane_actives, rho_membrane_actives):
-    num_nodes = rac_membrane_actives.shape[0]
+def determine_rac_rho_domination(rac_acts, rho_acts):
+    nverts = rac_acts.shape[0]
 
-    domination_array = np.empty(num_nodes, dtype=np.int64)
+    domination_array = np.empty(nverts, dtype=np.int64)
 
-    for ni in range(num_nodes):
-        if rac_membrane_actives[ni] < rho_membrane_actives[ni]:
+    for ni in range(nverts):
+        if rac_acts[ni] < rho_acts[ni]:
             domination_array[ni] = 0
         else:
             domination_array[ni] = 1
@@ -170,20 +146,20 @@ def determine_rac_rho_domination(rac_membrane_actives, rho_membrane_actives):
 
 # @nb.jit(nopython=True)
 def calculate_rgtpase_mediated_forces(
-    num_nodes,
-        rac_membrane_actives,
-    rho_membrane_actives,
+    nverts,
+        rac_acts,
+    rho_acts,
     threshold_force_rac_activity,
     threshold_force_rho_activity,
     max_force_rac,
     max_force_rho,
-    unit_inside_pointing_vectors,
+    uivs,
 ):
-    rgtpase_mediated_force_mags = np.zeros(num_nodes, dtype=np.float64)
+    rgtpase_mediated_force_mags = np.zeros(nverts, dtype=np.float64)
 
-    for ni in range(num_nodes):
-        rac_activity = rac_membrane_actives[ni]
-        rho_activity = rho_membrane_actives[ni]
+    for ni in range(nverts):
+        rac_activity = rac_acts[ni]
+        rho_activity = rho_acts[ni]
 
         if rac_activity > rho_activity:
             mag_frac = capped_linear_function(
@@ -201,129 +177,31 @@ def calculate_rgtpase_mediated_forces(
 
         rgtpase_mediated_force_mags[ni] = -1 * force_mag
 
-    np.empty((num_nodes, 2), dtype=np.float64)
+    np.empty((nverts, 2), dtype=np.float64)
     result = geometry.multiply_vectors_by_scalars(
-        unit_inside_pointing_vectors, rgtpase_mediated_force_mags
+        uivs, rgtpase_mediated_force_mags
     )
 
     return result
-
-
-# ---------------------------------------------------------------------
-
-
-@nb.jit(nopython=True)
-def capped_linear_function_adhesion(x, normalizer):
-    result = x / normalizer
-
-    if result < 0.0 or result > 1.0:
-        return 0.0
-    else:
-        return result
-
-
-# -----------------------------------------------------------------------
-
-
-@nb.jit(nopython=True)
-def calculate_adhesion_forces(
-    num_nodes,
-    num_cells,
-    this_ci,
-    this_cell_coords,
-    this_cell_forces,
-    force_adh_constant,
-    close_point_on_other_cells_to_each_node_exists,
-    close_point_on_other_cells_to_each_node,
-    close_point_on_other_cells_to_each_node_indices,
-    close_point_on_other_cells_to_each_node_projection_factors,
-        all_cells_node_forces,
-    closeness_dist_criteria,
-    unit_inside_pointing_vectors,
-    max_force_adh,
-):
-    F_adh = np.zeros((num_nodes, 2), dtype=np.float64)
-    np.zeros(2, dtype=np.float64)
-
-    for ni in range(num_nodes):
-        this_this_cell_coords = this_cell_coords[ni]
-        this_node_force = this_cell_forces[ni]
-        this_node_F_adh = np.zeros(2, dtype=np.float64)
-        this_node_uiv = unit_inside_pointing_vectors[ni]
-        for ci in range(num_cells):
-            if ci != this_ci:
-                if close_point_on_other_cells_to_each_node_exists[ni][ci] == 1:
-                    dist = geometry.calculate_2D_vector_mag(
-                        close_point_on_other_cells_to_each_node[ni][ci]
-                        - this_this_cell_coords
-                    )
-                    close_ni_a, close_ni_b = close_point_on_other_cells_to_each_node_indices[
-                        ni][ci]
-
-                    if close_ni_a == close_ni_b:
-                        # closest point is another node
-                        close_point_force = all_cells_node_forces[ci][close_ni_a]
-                    else:
-                        # closest point is on a line segment between two nodes
-                        close_ni_a_force = all_cells_node_forces[ci][close_ni_a]
-                        close_ni_b_force = all_cells_node_forces[ci][close_ni_b]
-                        projection_factor = close_point_on_other_cells_to_each_node_projection_factors[
-                            ni][ci]
-                        close_point_force = (
-                            1 - projection_factor
-                        ) * close_ni_a_force + projection_factor * close_ni_b_force
-
-                    relative_force = close_point_force - this_node_force
-                    # proj_this_force_on_uiv = geometry.calculate_projection_of_a_on_b(this_node_force, this_node_uiv)
-                    # prof_other_force_on_uiv = geometry.calculate_projection_of_a_on_b(close_point_force, this_node_uiv)
-
-                    if (
-                        abs(
-                            geometry.calculate_projection_of_a_on_b(
-                                relative_force, this_node_uiv
-                            )
-                        )
-                        < 1e-1
-                    ):
-                        continue
-                    else:
-                        force_adh = (
-                            force_adh_constant
-                            * relative_force
-                            * capped_linear_function_adhesion(
-                                dist, 3 * closeness_dist_criteria
-                            )
-                        )
-
-                        if geometry.calculate_2D_vector_mag(
-                                force_adh) > max_force_adh:
-                            force_adh = 0.0 * force_adh
-
-                        this_node_F_adh += force_adh
-
-        F_adh[ni] = this_node_F_adh
-
-    return F_adh
-
 
 # -----------------------------------------------------------------------
 
 
 @nb.jit(nopython=True)
 def calculate_external_forces(
-    num_nodes,
+    nverts,
     num_cells,
     this_ci,
     close_point_on_other_cells_to_each_node_exists,
         close_point_on_other_cells_to_each_node_indices,
         all_cells_node_forces,
-        unit_inside_pointing_vectors,
+        uivs,
 ):
-    F_external = np.zeros((num_nodes, 2), dtype=np.float64)
+    F_external = np.zeros((nverts, 2), dtype=np.float64)
 
-    for ni in range(num_nodes):
+    for ni in range(nverts):
         np.zeros(2, dtype=np.float64)
-        uiv = unit_inside_pointing_vectors[ni]
+        uiv = uivs[ni]
 
         for ci in range(num_cells):
             if ci != this_ci:
@@ -366,61 +244,61 @@ def calculate_external_forces(
 # ----------------------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_forces(
-    num_nodes,
+    nverts,
         this_cell_coords,
-    rac_membrane_actives,
-    rho_membrane_actives,
-    length_edge_resting,
+    rac_acts,
+    rho_acts,
+    rest_edge_len,
     stiffness_edge,
     threhsold_force_rac_activity,
     threhsold_force_rho_activity,
     max_force_rac,
     max_force_rho,
-        area_resting,
-    stiffness_cytoplasmic,
+        rest_area,
+    stiffness_cyto,
 ):
 
-    unit_inside_pointing_vectors = geometry.calculate_unit_inside_pointing_vecs(
+    uivs = geometry.calculate_unit_inside_pointing_vecs(
         this_cell_coords)
 
     rgtpase_mediated_forces = calculate_rgtpase_mediated_forces(
-        num_nodes,
-        rac_membrane_actives,
-        rho_membrane_actives,
+        nverts,
+        rac_acts,
+        rho_acts,
         threhsold_force_rac_activity,
         threhsold_force_rho_activity,
         max_force_rac,
         max_force_rho,
-        unit_inside_pointing_vectors,
+        uivs,
     )
 
-    F_cytoplasmic = calculate_cytoplasmic_force(
-        num_nodes,
+    cyto_forces = calculate_cytoplasmic_force(
+        nverts,
         this_cell_coords,
-        area_resting,
-        stiffness_cytoplasmic,
-        unit_inside_pointing_vectors,
+        rest_area,
+        stiffness_cyto,
+        uivs,
     )
 
-    local_strains, EFplus, EFminus, edge_strains = calculate_spring_edge_forces(
-        num_nodes, this_cell_coords, stiffness_edge, length_edge_resting
+    local_strains, edge_forces_plus, edge_forces_minus, edge_strains = calculate_spring_edge_forces(
+        nverts, this_cell_coords, stiffness_edge, rest_edge_len
     )
 
-    F_internal = rgtpase_mediated_forces + EFplus + EFminus + F_cytoplasmic
+    F_internal = rgtpase_mediated_forces + edge_forces_plus + edge_forces_minus + cyto_forces
 
-    # F_external = calculate_external_forces(num_nodes, num_cells, this_ci, close_point_on_other_cells_to_each_node_exists, close_point_on_other_cells_to_each_node, close_point_on_other_cells_to_each_node_indices, close_point_on_other_cells_to_each_node_projection_factors, all_cells_centres, all_cells_node_forces, closeness_dist_criteria, unit_inside_pointing_vectors)
+    # F_external = calculate_external_forces(nverts, num_cells, this_ci, close_point_on_other_cells_to_each_node_exists, close_point_on_other_cells_to_each_node, close_point_on_other_cells_to_each_node_indices, close_point_on_other_cells_to_each_node_projection_factors, all_cells_centres, all_cells_node_forces, closeness_dist_criteria, uivs)
 
     F = F_internal  # + F_external
 
     return (
         F,
-        EFplus,
-        EFminus,
+        edge_forces_plus,
+        edge_forces_minus,
         rgtpase_mediated_forces,
-        F_cytoplasmic,
+        cyto_forces,
         edge_strains,
         local_strains,
-        unit_inside_pointing_vectors,
+        uivs,
     )
 
 

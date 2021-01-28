@@ -7,73 +7,13 @@ Created on Tue May 12 13:27:54 2015
 import numba as nb
 import numpy as np
 
-
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
-def hill_function(exp, thresh, sig):
-    pow_sig = sig ** exp
-    pow_thresh = thresh ** exp
+def hill_function3(thresh, sig):
+    pow_sig = sig ** 3.0
+    pow_thresh = thresh ** 3.0
 
     return pow_sig / (pow_thresh + pow_sig)
-
-
-# -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def generate_random_factor(distribution_width):
-    random_delta_rac_factor = (np.random.rand() - 0.5) * distribution_width
-    return random_delta_rac_factor
-
-
-# ---------------------------------------------------------
-@nb.jit(nopython=True)
-def bell_function(x, centre, width, height, flatness):
-    delta = -1 * (x - centre) ** flatness
-    epsilon = 1.0 / (width ** 2)
-
-    return height * np.exp(delta * epsilon)
-
-
-# ---------------------------------------------------------
-@nb.jit(nopython=True)
-def reverse_bell_function(x, centre, width, depth, flatness):
-    return_val = 1 - bell_function(x, centre, width, depth, flatness)
-    return return_val
-
-
-# ---------------------------------------------------------
-@nb.jit(nopython=True)
-def generate_randomization_width(
-        rac_active,
-        randomization_width_baseline,
-        randomization_width_hf_exponent,
-        randomization_width_halfmax_threshold,
-        randomization_centre,
-        randomization_width,
-        randomization_depth,
-        flatness,
-        randomization_function_type,
-):
-    if randomization_function_type == 0:
-        width = randomization_width_baseline * (
-                1
-                - hill_function(
-            randomization_width_hf_exponent,
-            randomization_width_halfmax_threshold,
-            rac_active,
-        )
-        )
-    elif randomization_function_type == 1:
-        width = reverse_bell_function(
-            rac_active,
-            randomization_centre,
-            randomization_width,
-            randomization_depth,
-            flatness,
-        )
-    else:
-        width = -10
-
-    return width
 
 
 # -----------------------------------------------------------------
@@ -81,17 +21,16 @@ def generate_randomization_width(
 
 
 def calculate_kgtp_rac(
-        conc_rac_membrane_actives,
-        exponent_rac_autoact,
-        threshold_rac_autoact,
-        kgtp_rac_baseline,
-        kgtp_rac_autoact_baseline,
-        coa_signals,
+        conc_rac_acts,
+        halfmax_rgtp_frac,
+        kgtp_rac,
+        kgtp_rac_auto,
+        x_coas,
         randomization_factors,
         intercellular_contact_factors,
         close_point_smoothness_factors,
 ):
-    num_vertices = conc_rac_membrane_actives.shape[0]
+    num_vertices = conc_rac_acts.shape[0]
     result = np.empty(num_vertices, dtype=np.float64)
 
     for i in range(num_vertices):
@@ -104,26 +43,25 @@ def calculate_kgtp_rac(
                              + intercellular_contact_factors[i_minus1]
                      ) / 3.0
         smooth_factor = np.max(close_point_smoothness_factors[i])
-        coa_signal = coa_signals[i]
+        x_coa = x_coas[i]
 
         if cil_factor > 0.0 or smooth_factor > 1e-6:
-            coa_signal = 0.0
+            x_coa = 0.0
 
-        rac_autoact_hill_effect = hill_function(
-            exponent_rac_autoact,
-            threshold_rac_autoact,
-            conc_rac_membrane_actives[i])
+        rac_autoact_hill_effect = hill_function3(
+            halfmax_rgtp_frac,
+            conc_rac_acts[i])
         kgtp_rac_autoact = (
-                kgtp_rac_autoact_baseline
+                kgtp_rac_auto
                 * rac_autoact_hill_effect
         )
 
-        if kgtp_rac_autoact > 1.25 * kgtp_rac_autoact_baseline:
-            kgtp_rac_autoact = 1.25 * kgtp_rac_autoact_baseline
+        if kgtp_rac_autoact > 1.25 * kgtp_rac_auto:
+            kgtp_rac_autoact = 1.25 * kgtp_rac_auto
 
         kgtp_rac_base = (
                                 1.0 + randomization_factors[
-                            i] + coa_signal) * kgtp_rac_baseline
+                            i] + x_coa) * kgtp_rac
         result[i] = kgtp_rac_base + kgtp_rac_autoact
 
     return result
@@ -132,23 +70,21 @@ def calculate_kgtp_rac(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kgtp_rho(
-        num_nodes,
-        conc_rho_membrane_active,
+        nverts,
+        conc_rho_act,
         intercellular_contact_factors,
-        exponent_rho_autoact,
-        threshold_rho_autoact,
-        kgtp_rho_baseline,
-        kgtp_rho_autoact_baseline,
+        halfmax_rgtp_frac,
+        kgtp_rho,
+        kgtp_rho_auto,
 ):
-    result = np.empty(num_nodes)
-    for i in range(num_nodes):
-        kgtp_rho_autoact = kgtp_rho_autoact_baseline * hill_function(
-            exponent_rho_autoact, threshold_rho_autoact,
-            conc_rho_membrane_active[i]
-        )
+    result = np.empty(nverts)
+    for i in range(nverts):
+        kgtp_rho_autoact = kgtp_rho_auto * hill_function3(halfmax_rgtp_frac,
+                                                          conc_rho_act[i]
+                                                          )
 
-        i_plus1 = (i + 1) % num_nodes
-        i_minus1 = (i - 1) % num_nodes
+        i_plus1 = (i + 1) % nverts
+        i_minus1 = (i - 1) % nverts
 
         cil_factor = (
                              intercellular_contact_factors[i]
@@ -158,46 +94,45 @@ def calculate_kgtp_rho(
 
         result[i] = (
                             1.0 + cil_factor
-                    ) * kgtp_rho_baseline + kgtp_rho_autoact
+                    ) * kgtp_rho + kgtp_rho_autoact
     return result
 
 
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kdgtp_rac(
-        num_nodes,
-        conc_rho_membrane_actives,
-        exponent_rho_mediated_rac_inhib,
-        threshold_rho_mediated_rac_inhib,
-        kdgtp_rac_baseline,
-        kdgtp_rho_mediated_rac_inhib_baseline,
+        nverts,
+        conc_rho_acts,
+        halfmax_rgtp_frac,
+        kdgtp_rac,
+        kdgtp_rho_on_rac,
         intercellular_contact_factors,
-        tension_mediated_rac_inhibition_half_strain,
-        tension_mediated_rac_inhibition_magnitude,
+        halfmax_tension_inhib,
+        tension_inhib,
         local_strains,
 ):
-    result = np.empty(num_nodes, dtype=np.float64)
+    result = np.empty(nverts, dtype=np.float64)
 
-    global_tension = np.sum(local_strains) / num_nodes
+    global_tension = np.sum(local_strains) / nverts
     if global_tension < 0.0:
         global_tension = 0.0
-    strain_inhibition = tension_mediated_rac_inhibition_magnitude * \
-                        hill_function(
-        3, tension_mediated_rac_inhibition_half_strain, global_tension
-    )
+    strain_inhibition = tension_inhib * \
+                        hill_function3(
+                            halfmax_tension_inhib,
+                            global_tension
+                            )
 
-    for i in range(num_nodes):
+    for i in range(nverts):
         kdgtp_rho_mediated_rac_inhib = (
-                kdgtp_rho_mediated_rac_inhib_baseline
-                * hill_function(
-            exponent_rho_mediated_rac_inhib,
-            threshold_rho_mediated_rac_inhib,
-            conc_rho_membrane_actives[i],
+                kdgtp_rho_on_rac
+                * hill_function3(
+            halfmax_rgtp_frac,
+            conc_rho_acts[i],
         )
         )
 
-        i_plus1 = (i + 1) % num_nodes
-        i_minus1 = (i - 1) % num_nodes
+        i_plus1 = (i + 1) % nverts
+        i_minus1 = (i - 1) % nverts
 
         cil_factor = (
                              intercellular_contact_factors[i]
@@ -207,7 +142,7 @@ def calculate_kdgtp_rac(
 
         result[i] = (
                             1.0 + cil_factor + strain_inhibition
-                    ) * kdgtp_rac_baseline + kdgtp_rho_mediated_rac_inhib
+                    ) * kdgtp_rac + kdgtp_rho_mediated_rac_inhib
 
     return result
 
@@ -215,36 +150,34 @@ def calculate_kdgtp_rac(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kdgtp_rho(
-        num_nodes,
-        conc_rac_membrane_active,
-        exponent_rac_mediated_rho_inhib,
-        threshold_rac_mediated_rho_inhib,
-        kdgtp_rho_baseline,
-        kdgtp_rac_mediated_rho_inhib_baseline,
+        nverts,
+        conc_rac_acts,
+        halfmax_rgtp_frac,
+        kdgtp_rho,
+        kdgtp_rac_on_rho,
 ):
-    result = np.empty(num_nodes, dtype=np.float64)
+    result = np.empty(nverts, dtype=np.float64)
 
-    for i in range(num_nodes):
+    for i in range(nverts):
         kdgtp_rac_mediated_rho_inhib = (
-                kdgtp_rac_mediated_rho_inhib_baseline
-                * hill_function(
-            exponent_rac_mediated_rho_inhib,
-            threshold_rac_mediated_rho_inhib,
-            conc_rac_membrane_active[i],
+                kdgtp_rac_on_rho
+                * hill_function3(
+            halfmax_rgtp_frac,
+            conc_rac_acts[i],
         )
         )
 
-        result[i] = kdgtp_rho_baseline + kdgtp_rac_mediated_rho_inhib
+        result[i] = kdgtp_rho + kdgtp_rac_mediated_rho_inhib
 
     return result
 
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
-def calculate_concentrations(num_nodes, species, avg_edge_lengths):
-    result = np.empty(num_nodes, dtype=np.float64)
+def calculate_concentrations(nverts, species, avg_edge_lengths):
+    result = np.empty(nverts, dtype=np.float64)
 
-    for i in range(num_nodes):
+    for i in range(nverts):
         result[i] = species[i] / avg_edge_lengths[i]
 
     return result
@@ -253,16 +186,16 @@ def calculate_concentrations(num_nodes, species, avg_edge_lengths):
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_flux_terms(
-        num_nodes, concentrations, diffusion_constant, edgeplus_lengths
+        nverts, concentrations, diffusion_rgtp, edgeplus_lengths
 ):
-    result = np.empty(num_nodes, dtype=np.float64)
+    result = np.empty(nverts, dtype=np.float64)
 
-    for i in range(num_nodes):
-        i_plus1_index = (i + 1) % num_nodes
+    for i in range(nverts):
+        i_plus1_ix = (i + 1) % nverts
 
         result[i] = (
-                -diffusion_constant
-                * (concentrations[i_plus1_index] - concentrations[i])
+                - diffusion_rgtp
+                * (concentrations[i_plus1_ix] - concentrations[i])
                 / edgeplus_lengths[i]
         )
 
@@ -272,21 +205,21 @@ def calculate_flux_terms(
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_diffusion(
-        num_nodes, concentrations, diffusion_constant, edgeplus_lengths
+        nverts, concentrations, diffusion_rgtp, edgeplus_lengths
 ):
-    result = np.empty(num_nodes, dtype=np.float64)
+    result = np.empty(nverts, dtype=np.float64)
 
     fluxes = calculate_flux_terms(
-        num_nodes,
+        nverts,
         concentrations,
-        diffusion_constant,
+        diffusion_rgtp,
         edgeplus_lengths,
     )
 
-    for i in range(num_nodes):
-        i_minus1_index = (i - 1) % num_nodes
+    for i in range(nverts):
+        i_minus1_ix = (i - 1) % nverts
 
-        result[i] = fluxes[i_minus1_index] - fluxes[i]
+        result[i] = fluxes[i_minus1_ix] - fluxes[i]
 
     return result
 
@@ -294,17 +227,17 @@ def calculate_diffusion(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_intercellular_contact_factors(
-        this_cell_index,
-        num_nodes,
+        this_cell_ix,
+        nverts,
         num_cells,
         intercellular_contact_factor_magnitudes,
         close_point_smoothness_factors,
 ):
-    intercellular_contact_factors = np.zeros(num_nodes, dtype=np.float64)
+    intercellular_contact_factors = np.zeros(nverts, dtype=np.float64)
 
     for other_ci in range(num_cells):
-        if other_ci != this_cell_index:
-            for ni in range(num_nodes):
+        if other_ci != this_cell_ix:
+            for ni in range(nverts):
                 current_ic_mag = intercellular_contact_factors[ni]
 
                 new_ic_mag = (
@@ -320,21 +253,21 @@ def calculate_intercellular_contact_factors(
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
-def calculate_coa_signals(
-        this_cell_index,
-        num_nodes,
+def calculate_x_coas(
+        this_cell_ix,
+        nverts,
         random_order_cell_indices,
-        coa_distribution_exponent,
-        cell_dependent_coa_signal_strengths,
+        coa_distrib_exp,
+        cell_dependent_x_coa_strengths,
         intercellular_dist_squared_matrix,
         line_segment_intersection_matrix,
-        intersection_exponent,
+        los_factor,
 ):
-    coa_signals = np.zeros(num_nodes, dtype=np.float64)
+    x_coas = np.zeros(nverts, dtype=np.float64)
     too_close_dist_squared = 1e-6
 
-    for ni in range(num_nodes):
-        this_node_coa_signal = coa_signals[ni]
+    for ni in range(nverts):
+        this_node_x_coa = x_coas[ni]
 
         this_node_relevant_line_seg_intersection_slice = \
             line_segment_intersection_matrix[
@@ -343,8 +276,8 @@ def calculate_coa_signals(
             intercellular_dist_squared_matrix[ni]
 
         for other_ci in random_order_cell_indices:
-            if other_ci != this_cell_index:
-                signal_strength = cell_dependent_coa_signal_strengths[other_ci]
+            if other_ci != this_cell_ix:
+                signal_strength = cell_dependent_x_coa_strengths[other_ci]
 
                 this_node_other_cell_relevant_line_seg_intersection_slice = \
                     this_node_relevant_line_seg_intersection_slice[
@@ -352,7 +285,7 @@ def calculate_coa_signals(
                 relevant_dist_squared_slice = \
                     this_node_relevant_dist_squared_slice[
                         other_ci]
-                for other_ni in range(num_nodes):
+                for other_ni in range(nverts):
                     line_segment_between_node_intersects_polygon = \
                         this_node_other_cell_relevant_line_seg_intersection_slice[
                             other_ni]
@@ -360,7 +293,7 @@ def calculate_coa_signals(
                             1.0
                             / (
                                     line_segment_between_node_intersects_polygon + 1.0)
-                            ** intersection_exponent
+                            ** los_factor
                     )
 
                     dist_squared_between_nodes = \
@@ -368,50 +301,50 @@ def calculate_coa_signals(
 
                     # print("====================")
                     # print("(ci: {}, vi: {}, ovi: {}, oci: {}):".format(
-                    #     this_cell_index, ni, other_ci, other_ni))
-                    # print("dist: {}".format(np.sqrt(dist_squared_between_nodes)))
+                    #     this_cell_ix, ni, other_ci, other_ni))
+                    # print("dist: {}".format(np.sqrt(
+                    # dist_squared_between_nodes)))
                     # print("num_intersects: {}".format(
                     #     line_segment_between_node_intersects_polygon))
                     # print("los_factor: {}".format(
                     #     intersection_factor))
 
-                    coa_signal = 0.0
+                    x_coa = 0.0
                     if dist_squared_between_nodes > too_close_dist_squared:
-                        coa_signal = (
+                        x_coa = (
                                 np.exp(
-                                    coa_distribution_exponent
+                                    coa_distrib_exp
                                     * np.sqrt(dist_squared_between_nodes)
                                 )
                                 * intersection_factor
                         )
-                    old_coa_signal = this_node_coa_signal
-                    this_node_coa_signal += coa_signal * signal_strength
-                    # print("coa_signal: {}".format(coa_signal))
+                    # old_x_coa = this_node_x_coa
+                    this_node_x_coa += x_coa * signal_strength
+                    # print("x_coa: {}".format(x_coa))
                     # print("signal_strength: {}".format(signal_strength))
                     # print(
-                    #     "new = {} + {}".format(old_coa_signal,
-                    #                            coa_signal * signal_strength))
+                    #     "new = {} + {}".format(old_x_coa,
+                    #                            x_coa * signal_strength))
 
+        x_coas[ni] = this_node_x_coa
 
-        coa_signals[ni] = this_node_coa_signal
-
-    return coa_signals
+    return x_coas
 
 
 # -------------------------------------------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_chemoattractant_shielding_effect_factors(
-        this_cell_index,
-        num_nodes,
+        this_cell_ix,
+        nverts,
         num_cells,
         intercellular_dist_squared_matrix,
         line_segment_intersection_matrix,
         chemoattractant_shielding_effect_length,
 ):
     chemoattractant_shielding_effect_factors = np.zeros(
-        num_nodes, dtype=np.float64)
+        nverts, dtype=np.float64)
 
-    for ni in range(num_nodes):
+    for ni in range(nverts):
         this_node_relevant_line_seg_intersection_slice = \
             line_segment_intersection_matrix[
                 ni]
@@ -421,7 +354,7 @@ def calculate_chemoattractant_shielding_effect_factors(
         sum_weights = 0.0
 
         for other_ci in range(num_cells):
-            if other_ci != this_cell_index:
+            if other_ci != this_cell_ix:
                 this_node_other_cell_relevant_line_seg_intersection_slice = \
                     this_node_relevant_line_seg_intersection_slice[
                         other_ci]
@@ -429,7 +362,7 @@ def calculate_chemoattractant_shielding_effect_factors(
                     this_node_relevant_dist_squared_slice[
                         other_ci]
 
-                for other_ni in range(num_nodes):
+                for other_ni in range(nverts):
                     if (
                             this_node_other_cell_relevant_line_seg_intersection_slice[
                                 other_ni] == 0):

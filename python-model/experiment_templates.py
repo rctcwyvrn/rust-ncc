@@ -82,23 +82,23 @@ def define_group_boxes_and_corridors(
                 np.sum(box_widths) + np.sum(x_space_between_boxes)
             )
 
-        for box_index in range(num_boxes):
-            if box_index > 0:
-                box_x_offsets[box_index] = (
+        for box_ix in range(num_boxes):
+            if box_ix > 0:
+                box_x_offsets[box_ix] = (
                     first_box_offset
-                    + x_space_between_boxes[box_index - 1]
-                    + np.sum(box_widths[:box_index])
-                    + np.sum(x_space_between_boxes[: (box_index - 1)])
+                    + x_space_between_boxes[box_ix - 1]
+                    + np.sum(box_widths[:box_ix])
+                    + np.sum(x_space_between_boxes[: (box_ix - 1)])
                 )
             else:
-                box_x_offsets[box_index] = first_box_offset
+                box_x_offsets[box_ix] = first_box_offset
 
     if y_placement_option != "OVERRIDE":
-        for box_index in range(num_boxes):
+        for box_ix in range(num_boxes):
             if y_placement_option == "ORIGIN":
-                box_y_offsets[box_index] = origin_y_offset
+                box_y_offsets[box_ix] = origin_y_offset
             else:
-                box_y_offsets[box_index] = 0.5 * plate_height - 0.5 * np.max(
+                box_y_offsets[box_ix] = 0.5 * plate_height - 0.5 * np.max(
                     box_heights
                 )
 
@@ -112,16 +112,16 @@ def define_group_boxes_and_corridors(
 # ===========================================================================
 
 
-def stringify_randomization_info(parameter_dict):
+def stringify_randomization_info(params):
     randomization_scheme, t, tv = (
-        parameter_dict["randomization_scheme"],
-        parameter_dict["randomization_time_mean"],
-        parameter_dict["randomization_time_variance_factor"],
+        params["randomization_scheme"],
+        params["randomization_time_mean"],
+        params["randomization_time_variance_factor"],
     )
     if randomization_scheme == "m":
         mag, np = (
-            parameter_dict["randomization_magnitude"],
-            parameter_dict["randomization_node_percentage"],
+            params["randomization_magnitude"],
+            params["randomization_node_percentage"],
         )
         return "-rand-{}-(t={}-tv={}-mag={}-np={})".format(
             randomization_scheme, t, tv, mag, np
@@ -135,56 +135,46 @@ def stringify_randomization_info(parameter_dict):
 
 
 def rust_comparison_test(
-        sub_experiment_number,
-        parameter_dict,
-        num_cells_responsive_to_chemoattractant=-1,
+        num_cells,
+        num_tsteps,
+        num_int_steps,
+        cil,
+        coa,
+        params,
         uniform_initial_polarization=False,
         no_randomization=False,
-        total_time_in_hours=3,
-        timestep_length=2,
-        integration_params=None,
-        allowed_drift_before_geometry_recalc=1.0,
-        default_coa=0,
-        default_cil=0,
-        num_experiment_repeats=1,
+        tstep_in_secs=2,
         box_width=4,
         box_height=4,
-        max_placement_distance_factor=1.0,
-        num_cells=0,
-        biased_rgtpase_distrib_defn_dict=None,
+        rgtp_distrib_def_dict=None,
         justify_parameters=True,
 ):
-    if integration_params is None:
-        integration_params = {"rtol": 1e-4}
-    if biased_rgtpase_distrib_defn_dict is None:
-        biased_rgtpase_distrib_defn_dict = {
+    if rgtp_distrib_def_dict is None:
+        rgtp_distrib_def_dict = {
             "default": ["biased nodes", [0, 1, 2, 3], 0.3]
         }
-    cell_diameter = 2 * parameter_dict["init_cell_radius"] / 1e-6
+    cell_diameter = 2 * params["cell_r"] / 1e-6
 
     if num_cells == 0:
         raise Exception("No cells!")
 
     if no_randomization:
-        parameter_dict.update([("randomization_scheme", None)])
+        params.update([("randomization_scheme", None)])
 
     experiment_name = "rt_{}_NC=({}, {}, {})_COA={}_CIL={}".format(
         sub_experiment_number,
         num_cells,
         box_width,
         box_height,
-        np.round(default_coa, decimals=3),
-        np.round(default_cil, decimals=3),
-    ) + stringify_randomization_info(parameter_dict)
+        np.round(coa, decimals=3),
+        np.round(cil, decimals=3),
+    ) + stringify_randomization_info(params)
     if uniform_initial_polarization:
         experiment_name += "-UIP"
     if not (num_cells_responsive_to_chemoattractant >=
             num_cells or num_cells_responsive_to_chemoattractant < 0):
         experiment_name += "-NRESP={}".format(
             num_cells_responsive_to_chemoattractant)
-
-    total_time = total_time_in_hours * 3600
-    num_timesteps = int(total_time / timestep_length)
 
     num_boxes = 1
     num_cells_in_boxes = [num_cells]
@@ -214,29 +204,30 @@ def rust_comparison_test(
         box_x_offsets=box_x_offsets,
     )
 
-    environment_wide_variable_defns = {
-        "num_timesteps": num_timesteps,
-        "T": timestep_length,
-        "integration_params": integration_params,
-        "allowed_drift_before_geometry_recalc": allowed_drift_before_geometry_recalc,
-        "max_placement_distance_factor": max_placement_distance_factor,
+    environment_wide_variable_defs = {
+        "num_tsteps": num_tsteps,
+        "num_cells": num_cells,
+        "num_int_steps": num_int_steps,
+        "cil": cil,
+        "coa": coa,
+        "char_t": tstep_in_secs,
     }
 
-    cell_dependent_coa_signal_strengths_defn_dicts_per_sub_experiment = [
-        [dict([(x, default_coa) for x in boxes])] * num_boxes
+    cell_dependent_x_coa_strengths_def_dicts_per_sub_experiment = [
+        [dict([(x, coa) for x in boxes])] * num_boxes
     ]
-    # intercellular_contact_factor_magnitudes_defn_dicts_per_sub_experiment = [{0: {0: default_cil, 1: default_cil}, 1: {0: default_cil, 1: default_cil}}]
-    cil_dict = dict([(n, default_cil) for n in range(num_boxes)])
-    intercellular_contact_factor_magnitudes_defn_dicts_per_sub_experiment = [
+    # intercellular_contact_factor_magnitudes_def_dicts_per_sub_experiment = [{0: {0: cil, 1: cil}, 1: {0: cil, 1: cil}}]
+    cil_dict = dict([(n, cil) for n in range(num_boxes)])
+    intercellular_contact_factor_magnitudes_def_dicts_per_sub_experiment = [
         dict([(n, cil_dict) for n in range(num_boxes)])
     ]
 
-    biased_rgtpase_distrib_defn_dicts = [
-        [biased_rgtpase_distrib_defn_dict] * num_boxes]
-    parameter_dict_per_sub_experiment = [[parameter_dict] * num_boxes]
+    rgtp_distrib_def_dicts = [
+        [rgtp_distrib_def_dict] * num_boxes]
+    params_per_sub_experiment = [[params] * num_boxes]
 
-    user_cell_group_defns_per_subexperiment = []
-    user_cell_group_defns = []
+    user_cell_group_defs_per_subexperiment = []
+    user_cell_group_defs = []
 
     si = 0
 
@@ -247,10 +238,10 @@ def rust_comparison_test(
         this_box_height = box_heights[bi]
 
         cell_group_dict = {
-            "cell_group_name": bi,
+            "group_name": bi,
             "num_cells": num_cells_in_boxes[bi],
             "num_cells_responsive_to_chemoattractant": num_cells_responsive_to_chemoattractant,
-            "cell_group_bounding_box": np.array(
+            "cell_group_bbox": np.array(
                 [
                     this_box_x_offset,
                     this_box_x_offset + this_box_width,
@@ -259,34 +250,34 @@ def rust_comparison_test(
                 ]
             )
             * 1e-6,
-            "interaction_factors_intercellular_contact_per_celltype":
-                intercellular_contact_factor_magnitudes_defn_dicts_per_sub_experiment[
+            "x_cils":
+                intercellular_contact_factor_magnitudes_def_dicts_per_sub_experiment[
                     si
             ][
                     bi
             ],
-            "interaction_factors_coa_per_celltype": cell_dependent_coa_signal_strengths_defn_dicts_per_sub_experiment[
+            "interaction_factors_coa_per_celltype": cell_dependent_x_coa_strengths_def_dicts_per_sub_experiment[
                 si
             ][
                 bi
             ],
-            "biased_rgtpase_distrib_defns": biased_rgtpase_distrib_defn_dicts[si][bi],
-            "parameter_dict": parameter_dict_per_sub_experiment[si][bi],
+            "rgtp_distrib_defs": rgtp_distrib_def_dicts[si][bi],
+            "params": params_per_sub_experiment[si][bi],
         }
 
-        user_cell_group_defns.append(cell_group_dict)
+        user_cell_group_defs.append(cell_group_dict)
 
-    user_cell_group_defns_per_subexperiment.append(user_cell_group_defns)
+    user_cell_group_defs_per_subexperiment.append(user_cell_group_defs)
 
-    cell_dependent_coa_signal_strengths = []
-    for cgi, cgd in enumerate(user_cell_group_defns):
+    cell_dependent_x_coa_strengths = []
+    for cgi, cgd in enumerate(user_cell_group_defs):
         signal_strength = cgd["interaction_factors_coa_per_celltype"][cgi]
         for ci in range(cgd["num_cells"]):
-            cell_dependent_coa_signal_strengths.append(signal_strength)
+            cell_dependent_x_coa_strengths.append(signal_strength)
 
     eu.run_template_experiments(
-        environment_wide_variable_defns,
-        user_cell_group_defns_per_subexperiment,
+        environment_wide_variable_defs,
+        user_cell_group_defs_per_subexperiment,
         num_experiment_repeats=num_experiment_repeats,
         justify_parameters=justify_parameters,
     )
@@ -295,5 +286,5 @@ def rust_comparison_test(
 
     return (
         experiment_name,
-        environment_wide_variable_defns,
+        environment_wide_variable_defs,
     )

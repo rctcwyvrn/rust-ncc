@@ -28,12 +28,12 @@ def is_numeric(s):
 # @nb.jit(nopython=True)
 
 
-def make_node_coords_array_given_xs_and_ys(num_nodes, xs, ys):
-    node_coords = np.empty((num_nodes, 2), dtype=np.float64)
+def make_verts_array_given_xs_and_ys(nverts, xs, ys):
+    verts = np.empty((nverts, 2), dtype=np.float64)
 
-    for i in range(num_nodes):
-        node_coord = node_coords[i]
-        node_coord[0] = xs[i]
-        node_coord[1] = ys[i]
+    for i in range(nverts):
+        vert = verts[i]
+        vert[0] = xs[i]
+        vert[1] = ys[i]
 
-    return node_coords
+    return verts

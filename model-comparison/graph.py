@@ -2,8 +2,8 @@ from retrieve import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-init_rust_dat, rust_dat = process_data("rust", 18, 2)
-init_py_dat, py_dat = process_data("python", 18, 2)
+init_rust_dat, rust_dat = process_data("rust", 1800, 2)
+init_py_dat, py_dat = process_data("python", 1800, 2)
 
 NUM_CELLS = init_py_dat["num_cells"]
 MAX_PLOT_TSTEP = init_py_dat["num_tsteps"]
