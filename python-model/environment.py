@@ -6,8 +6,9 @@ import numpy as np
 
 import cell
 import geometry
-import params
+import parameters
 
+import hardio
 from hardio import Writer
 
 """
@@ -47,42 +48,23 @@ class Environment:
     """
 
     def __init__(
-            self,
-            num_tsteps,
-            cell_group_defs,
-            char_t,
+            self, params
     ):
-        self.cell_group_defs = cell_group_defs
+        self.params = params
 
         self.curr_tpoint = 0
-        self.char_t = char_t
+        self.t = params["t"]
 
-        self.num_tsteps = num_tsteps
-        self.num_tpoints = num_tsteps + 1
+        self.num_tsteps = params["num_tsteps"]
+        self.num_tpoints = self.num_tsteps + 1
         self.timepoints = np.arange(0, self.num_tpoints)
-        self.num_int_steps = 10
+        self.num_int_steps = params["num_int_steps"]
+        self.num_cells = params["num_cells"]
 
-        self.num_cell_groups = len(self.cell_group_defs)
-        self.num_cells = np.sum(
-            [
-                cell_group_def["num_cells"]
-                for cell_group_def in self.cell_group_defs
-            ],
-            dtype=np.int64,
-        )
-        self. writer = Writer(num_cells, num_tsteps, num_int_steps, cil, coa)
+        self.writer = Writer(params)
+        self.writer.save_header(params)
 
         self.env_cells = self.make_cells()
-        nverts_per_cell = np.array(
-            [x.nverts for x in self.env_cells], dtype=np.int64
-        )
-        self.nverts = nverts_per_cell[0]
-        for n in nverts_per_cell[1:]:
-            if n != self.nverts:
-                raise Exception(
-                    "There exists a cell with number of nodes different "
-                    "from other cells!"
-                )
         self.cell_indices = np.arange(self.num_cells)
         self.exec_orders = np.zeros(
             (self.num_tpoints, self.num_cells), dtype=np.int64
@@ -90,14 +72,14 @@ class Environment:
 
         self.all_geometry_tasks = np.array(
             geometry.create_dist_and_line_segment_interesection_test_args(
-                self.num_cells, self.nverts
+                self.num_cells, 16
             ),
             dtype=np.int64,
         )
         self.geometry_tasks_per_cell = np.array(
             [
                 geometry.create_dist_and_line_segment_interesection_test_args_relative_to_specific_cell(
-                    ci, self.num_cells, self.nverts
+                    ci, self.num_cells, 16
                 )
                 for ci in range(self.num_cells)
             ],
@@ -109,19 +91,20 @@ class Environment:
         )
         cells_bb_array = \
             geometry.calc_init_cell_bbs(
-            self.num_cells, environment_cells_verts)
+                self.num_cells, environment_cells_verts)
         (
             cells_node_distance_matrix,
             cells_line_segment_intersection_matrix,
         ) = geometry.init_lseg_intersects_and_dist_sq_matrices_old(
             self.num_cells,
-            self.nverts,
+            16,
             cells_bb_array,
             environment_cells_verts,
         )
         for (ci, cell) in enumerate(self.env_cells):
             cell.initialize_cell(cells_node_distance_matrix[ci],
-                                 cells_line_segment_intersection_matrix[ci])
+                                 cells_line_segment_intersection_matrix[ci],
+                                 environment_cells_verts)
 
         self.mode = MODE_EXECUTE
         self.animation_settings = None
@@ -146,34 +129,17 @@ class Environment:
     # -----------------------------------------------------------------
 
     def make_cells(self):
-        env_cells = []
-
-        ci_offset = 0
-        for cell_group_ix, cell_group_def in enumerate(
-                self.cell_group_defs):
-            cells_in_group, init_cell_bbs = self.create_cell_group(
-                self.num_tsteps, cell_group_def, cell_group_ix, ci_offset
-            )
-            ci_offset += len(cells_in_group)
-            env_cells += cells_in_group
-
+        env_cells, init_cell_bbs = self.create_cell_group(self.params)
         return np.array(env_cells)
 
     # -----------------------------------------------------------------
 
     def create_cell_group(
-            self, num_tsteps, cell_group_def, cell_group_ix, ci_offset
+            self, params
     ):
-        group_name = cell_group_def["group_name"]
-        num_cells = cell_group_def["num_cells"]
-        cell_group_bb = cell_group_def["cell_group_bbox"]
-
-        cell_params = copy.deepcopy(cell_group_def["params"])
-        cell_r = cell_params["cell_r"]
-        nverts = cell_params["nverts"]
-
-        rgtp_distrib_defs = cell_group_def["rgtp_distrib_defs"]
-        cells_with_bias = list(rgtp_distrib_defs.keys())
+        num_cells = params["num_cells"]
+        cell_group_bb = params["cell_group_bbox"]
+        cell_r = params["cell_r"]
 
         init_cell_bbs = self.calculate_cell_bbs(
             num_cells,
@@ -184,48 +150,26 @@ class Environment:
         cells_in_group = []
 
         for ci, bbox in enumerate(init_cell_bbs):
-            bias_def = rgtp_distrib_defs["default"]
-
-            if ci in cells_with_bias:
-                bias_def = rgtp_distrib_defs[ci]
-
             (
                 init_verts,
                 rest_edge_len,
                 rest_area,
             ) = self.create_default_init_cell_verts(
-                bbox, cell_r, nverts
+                bbox, cell_r
             )
 
-            cell_params.update(
+            params.update(
                 [
-                    ("rgtp_distrib_def", bias_def),
                     ("init_verts", init_verts),
                     ("rest_edge_len", rest_edge_len),
                     ("rest_area", rest_area),
                 ]
             )
 
-            ci = ci_offset + cell_number
-
-            undefined_labels = params.find_undefined_labels(
-                cell_params)
-            if len(undefined_labels) > 0:
-                raise Exception(
-                    "The following labels are not yet defined: {}".format(
-                        undefined_labels
-                    )
-                )
-
             new_cell = cell.Cell(
-                str(group_name) + "_" + str(ci),
-                cell_group_ix,
+                0,
                 ci,
-                num_tsteps,
-                self.char_t,
-                self.num_cells,
-                self.num_int_steps,
-                cell_params,
+                params,
             )
 
             cells_in_group.append(new_cell)
@@ -295,12 +239,12 @@ class Environment:
 
     @staticmethod
     def create_default_init_cell_verts(
-            bbox, cell_r, nverts
+            bbox, cell_r
     ):
         cell_centre = calc_bb_centre(bbox)
 
         cell_node_thetas = np.pi * \
-                           np.linspace(0, 2, endpoint=False, num=nverts)
+                           np.linspace(0, 2, endpoint=False, num=16)
         cell_verts = np.transpose(
             np.array(
                 [
@@ -339,7 +283,6 @@ class Environment:
             cells_bb_array,
             cells_line_segment_intersection_matrix,
             environment_cells_verts,
-            environment_cells_node_forces,
             environment_cells,
     ):
         execution_sequence = self.cell_indices
@@ -347,27 +290,20 @@ class Environment:
 
         self.exec_orders[t] = np.copy(execution_sequence)
 
-        fw.write(["=============================="])
-
         for ci in execution_sequence:
             current_cell = environment_cells[ci]
 
-            fw.write(["++++++++++++++++++++++++++++++", "ci: {}".format(ci)])
             current_cell.execute_step(
                 ci,
-                self.nverts,
                 environment_cells_verts,
-                environment_cells_node_forces,
                 cells_node_distance_matrix[ci],
                 cells_line_segment_intersection_matrix[ci],
+                self.writer,
             )
-            fw.write(["++++++++++++++++++++++++++++++"])
 
             this_cell_coords = current_cell.curr_verts
-            this_cell_forces = current_cell.curr_node_forces
 
             environment_cells_verts[ci] = this_cell_coords
-            environment_cells_node_forces[ci] = this_cell_forces
 
             cells_bb_array[ci] = \
                 geometry.calculate_polygon_bb(this_cell_coords)
@@ -381,14 +317,11 @@ class Environment:
                 sequential=True,
             )
 
-        fw.write(["=============================="])
-
         return (
             cells_node_distance_matrix,
             cells_bb_array,
             cells_line_segment_intersection_matrix,
             environment_cells_verts,
-            environment_cells_node_forces,
         )
 
     # -----------------------------------------------------------------
@@ -398,23 +331,19 @@ class Environment:
     ):
         simulation_st = time.time()
         num_cells = self.num_cells
-        nverts = self.nverts
 
         environment_cells = self.env_cells
-        all_cell_verts = np.array([x.curr_verts for x in
-                                                  environment_cells])
-        environment_cells_node_forces = np.array([x.curr_node_forces for x in
-                                                  environment_cells])
+        all_cell_verts = np.array([x.curr_verts for x in environment_cells])
 
         cell_bbs = \
             geometry.calc_init_cell_bbs(
-            num_cells, all_cell_verts)
+                num_cells, all_cell_verts)
         (
             cells_node_distance_matrix,
             cells_line_segment_intersection_matrix,
         ) = geometry.init_lseg_intersects_and_dist_sq_matrices_old(
             num_cells,
-            nverts,
+            16,
             cell_bbs,
             all_cell_verts,
         )
@@ -424,28 +353,19 @@ class Environment:
         for a_cell in self.env_cells:
             cell_group_indices.append(a_cell.cell_group_ix)
 
-        fw.write(["******************************",
-                  "num_tsteps: {}".format(self.num_tsteps),
-                  "num_cells: {}".format(self.num_cells),
-                  "num_int_steps: {}".format(self.num_int_steps),
-                  "******************************"])
-
         if self.curr_tpoint == 0 or self.curr_tpoint < self.num_tsteps:
             for t in self.timepoints[self.curr_tpoint: -1]:
-
                 (
                     cells_node_distance_matrix,
                     cell_bbs,
                     cells_line_segment_intersection_matrix,
                     all_cell_verts,
-                    environment_cells_node_forces,
                 ) = self.execute_system_dynamics_in_random_sequence(
                     t,
                     cells_node_distance_matrix,
                     cell_bbs,
                     cells_line_segment_intersection_matrix,
                     all_cell_verts,
-                    environment_cells_node_forces,
                     environment_cells,
                 )
                 self.curr_tpoint += 1
@@ -453,6 +373,7 @@ class Environment:
             raise Exception("max_t has already been reached.")
 
         simulation_et = time.time()
+        self.writer.close()
 
         simulation_time = np.round(simulation_et - simulation_st, decimals=2)
 

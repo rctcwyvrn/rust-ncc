@@ -1114,8 +1114,8 @@ def do_close_points_to_each_node_on_other_cells_exist(
         this_ci,
         this_cell_verts,
         dist_squared_array,
-        close_criterion_0_until,
-        close_criterion_1_at,
+        close_0_at,
+        close_1_at,
         all_cells_verts,
         are_nodes_inside_other_cells,
 ):
@@ -1133,8 +1133,8 @@ def do_close_points_to_each_node_on_other_cells_exist(
         num_cells, num_vertices, this_ci, dist_squared_array
     )
 
-    closeness_dist_criteria_0_until = np.sqrt(close_criterion_0_until)
-    closeness_dist_criteria_1_at = np.sqrt(close_criterion_1_at)
+    close_0 = np.sqrt(close_0_at)
+    close_1 = np.sqrt(close_1_at)
 
     for ni in range(num_vertices):
         closest_nodes_to_this_node = closest_nodes_on_other_cells[ni]
@@ -1155,7 +1155,7 @@ def do_close_points_to_each_node_on_other_cells_exist(
                 if (
                         closest_point_dist_squared != -1
                         and closest_point_dist_squared
-                        < close_criterion_0_until
+                        < close_0_at
                 ):
                     close_points_exist[ni][ci] = 1
                     close_points[ni][ci] = closest_point_coords
@@ -1164,11 +1164,11 @@ def do_close_points_to_each_node_on_other_cells_exist(
                     close_point_smoothness_factors[ni][
                         ci
                     ] = closeness_smoothening_linear_function(
-                        closeness_dist_criteria_0_until,
-                        closeness_dist_criteria_1_at,
+                        close_0,
+                        close_1,
                         np.sqrt(closest_point_dist_squared),
                     )
-                elif closest_node_dist < close_criterion_0_until:
+                elif closest_node_dist < close_0_at:
                     close_points_exist[ni][ci] = 1
                     close_points[ni][ci] = other_cell_verts[closest_ni]
                     closest_node_indices[1] = closest_ni
@@ -1176,8 +1176,8 @@ def do_close_points_to_each_node_on_other_cells_exist(
                     close_point_smoothness_factors[ni][
                         ci
                     ] = closeness_smoothening_linear_function(
-                        closeness_dist_criteria_0_until,
-                        closeness_dist_criteria_1_at,
+                        close_0,
+                        close_1,
                         np.sqrt(closest_node_dist),
                     )
                 elif are_nodes_inside_other_cells[ni][ci] == 1:

@@ -7,6 +7,7 @@ Created on Tue May 12 13:27:54 2015
 import numba as nb
 import numpy as np
 
+
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def hill_function3(thresh, sig):
@@ -22,7 +23,7 @@ def hill_function3(thresh, sig):
 
 def calculate_kgtp_rac(
         conc_rac_acts,
-        halfmax_rgtp_frac,
+        halfmax_vertex_rgtp_conc,
         kgtp_rac,
         kgtp_rac_auto,
         x_coas,
@@ -49,7 +50,7 @@ def calculate_kgtp_rac(
             x_coa = 0.0
 
         rac_autoact_hill_effect = hill_function3(
-            halfmax_rgtp_frac,
+            halfmax_vertex_rgtp_conc,
             conc_rac_acts[i])
         kgtp_rac_autoact = (
                 kgtp_rac_auto
@@ -70,21 +71,20 @@ def calculate_kgtp_rac(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kgtp_rho(
-        nverts,
         conc_rho_act,
         intercellular_contact_factors,
-        halfmax_rgtp_frac,
+        halfmax_vertex_rgtp_conc,
         kgtp_rho,
         kgtp_rho_auto,
 ):
-    result = np.empty(nverts)
-    for i in range(nverts):
-        kgtp_rho_autoact = kgtp_rho_auto * hill_function3(halfmax_rgtp_frac,
+    result = np.empty(16)
+    for i in range(16):
+        kgtp_rho_autoact = kgtp_rho_auto * hill_function3(halfmax_vertex_rgtp_conc,
                                                           conc_rho_act[i]
                                                           )
 
-        i_plus1 = (i + 1) % nverts
-        i_minus1 = (i - 1) % nverts
+        i_plus1 = (i + 1) % 16
+        i_minus1 = (i - 1) % 16
 
         cil_factor = (
                              intercellular_contact_factors[i]
@@ -101,9 +101,8 @@ def calculate_kgtp_rho(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kdgtp_rac(
-        nverts,
         conc_rho_acts,
-        halfmax_rgtp_frac,
+        halfmax_vertex_rgtp_conc,
         kdgtp_rac,
         kdgtp_rho_on_rac,
         intercellular_contact_factors,
@@ -111,28 +110,28 @@ def calculate_kdgtp_rac(
         tension_inhib,
         local_strains,
 ):
-    result = np.empty(nverts, dtype=np.float64)
+    result = np.empty(16, dtype=np.float64)
 
-    global_tension = np.sum(local_strains) / nverts
+    global_tension = np.sum(local_strains) / 16
     if global_tension < 0.0:
         global_tension = 0.0
     strain_inhibition = tension_inhib * \
                         hill_function3(
                             halfmax_tension_inhib,
                             global_tension
-                            )
+                        )
 
-    for i in range(nverts):
+    for i in range(16):
         kdgtp_rho_mediated_rac_inhib = (
                 kdgtp_rho_on_rac
                 * hill_function3(
-            halfmax_rgtp_frac,
+            halfmax_vertex_rgtp_conc,
             conc_rho_acts[i],
         )
         )
 
-        i_plus1 = (i + 1) % nverts
-        i_minus1 = (i - 1) % nverts
+        i_plus1 = (i + 1) % 16
+        i_minus1 = (i - 1) % 16
 
         cil_factor = (
                              intercellular_contact_factors[i]
@@ -150,19 +149,18 @@ def calculate_kdgtp_rac(
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
 def calculate_kdgtp_rho(
-        nverts,
         conc_rac_acts,
-        halfmax_rgtp_frac,
+        halfmax_vertex_rgtp_conc,
         kdgtp_rho,
         kdgtp_rac_on_rho,
 ):
-    result = np.empty(nverts, dtype=np.float64)
+    result = np.empty(16, dtype=np.float64)
 
-    for i in range(nverts):
+    for i in range(16):
         kdgtp_rac_mediated_rho_inhib = (
                 kdgtp_rac_on_rho
                 * hill_function3(
-            halfmax_rgtp_frac,
+            halfmax_vertex_rgtp_conc,
             conc_rac_acts[i],
         )
         )
@@ -174,10 +172,10 @@ def calculate_kdgtp_rho(
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
-def calculate_concentrations(nverts, species, avg_edge_lengths):
-    result = np.empty(nverts, dtype=np.float64)
+def calc_concs(species, avg_edge_lengths):
+    result = np.empty(16, dtype=np.float64)
 
-    for i in range(nverts):
+    for i in range(16):
         result[i] = species[i] / avg_edge_lengths[i]
 
     return result
@@ -185,13 +183,11 @@ def calculate_concentrations(nverts, species, avg_edge_lengths):
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
-def calculate_flux_terms(
-        nverts, concentrations, diffusion_rgtp, edgeplus_lengths
-):
-    result = np.empty(nverts, dtype=np.float64)
+def calculate_flux_terms(concentrations, diffusion_rgtp, edgeplus_lengths):
+    result = np.empty(16, dtype=np.float64)
 
-    for i in range(nverts):
-        i_plus1_ix = (i + 1) % nverts
+    for i in range(16):
+        i_plus1_ix = (i + 1) % 16
 
         result[i] = (
                 - diffusion_rgtp
@@ -204,20 +200,17 @@ def calculate_flux_terms(
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
-def calculate_diffusion(
-        nverts, concentrations, diffusion_rgtp, edgeplus_lengths
-):
-    result = np.empty(nverts, dtype=np.float64)
+def calculate_diffusion(concentrations, diffusion_rgtp, edgeplus_lengths):
+    result = np.empty(16, dtype=np.float64)
 
     fluxes = calculate_flux_terms(
-        nverts,
         concentrations,
         diffusion_rgtp,
         edgeplus_lengths,
     )
 
-    for i in range(nverts):
-        i_minus1_ix = (i - 1) % nverts
+    for i in range(16):
+        i_minus1_ix = (i - 1) % 16
 
         result[i] = fluxes[i_minus1_ix] - fluxes[i]
 
@@ -226,47 +219,40 @@ def calculate_diffusion(
 
 # -----------------------------------------------------------------
 @nb.jit(nopython=True)
-def calculate_intercellular_contact_factors(
+def calc_x_cils(
         this_cell_ix,
-        nverts,
         num_cells,
-        intercellular_contact_factor_magnitudes,
+        cil_mag,
         close_point_smoothness_factors,
 ):
-    intercellular_contact_factors = np.zeros(nverts, dtype=np.float64)
+    x_cils = np.zeros(16, dtype=np.float64)
 
     for other_ci in range(num_cells):
         if other_ci != this_cell_ix:
-            for ni in range(nverts):
-                current_ic_mag = intercellular_contact_factors[ni]
-
-                new_ic_mag = (
-                        intercellular_contact_factor_magnitudes[other_ci]
+            for ni in range(16):
+                x_cils[ni] = (
+                        cil_mag
                         * close_point_smoothness_factors[ni][other_ci]
                 )
 
-                if new_ic_mag > current_ic_mag:
-                    intercellular_contact_factors[ni] = new_ic_mag
-
-    return intercellular_contact_factors
+    return x_cils
 
 
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_x_coas(
         this_cell_ix,
-        nverts,
         random_order_cell_indices,
         coa_distrib_exp,
-        cell_dependent_x_coa_strengths,
+        coa_mag,
         intercellular_dist_squared_matrix,
         line_segment_intersection_matrix,
-        los_factor,
+        coa_los_penalty,
 ):
-    x_coas = np.zeros(nverts, dtype=np.float64)
+    x_coas = np.zeros(16, dtype=np.float64)
     too_close_dist_squared = 1e-6
 
-    for ni in range(nverts):
+    for ni in range(16):
         this_node_x_coa = x_coas[ni]
 
         this_node_relevant_line_seg_intersection_slice = \
@@ -277,15 +263,13 @@ def calculate_x_coas(
 
         for other_ci in random_order_cell_indices:
             if other_ci != this_cell_ix:
-                signal_strength = cell_dependent_x_coa_strengths[other_ci]
-
                 this_node_other_cell_relevant_line_seg_intersection_slice = \
                     this_node_relevant_line_seg_intersection_slice[
                         other_ci]
                 relevant_dist_squared_slice = \
                     this_node_relevant_dist_squared_slice[
                         other_ci]
-                for other_ni in range(nverts):
+                for other_ni in range(16):
                     line_segment_between_node_intersects_polygon = \
                         this_node_other_cell_relevant_line_seg_intersection_slice[
                             other_ni]
@@ -293,7 +277,7 @@ def calculate_x_coas(
                             1.0
                             / (
                                     line_segment_between_node_intersects_polygon + 1.0)
-                            ** los_factor
+                            ** coa_los_penalty
                     )
 
                     dist_squared_between_nodes = \
@@ -306,7 +290,7 @@ def calculate_x_coas(
                     # dist_squared_between_nodes)))
                     # print("num_intersects: {}".format(
                     #     line_segment_between_node_intersects_polygon))
-                    # print("los_factor: {}".format(
+                    # print("coa_los_penalty: {}".format(
                     #     intersection_factor))
 
                     x_coa = 0.0
@@ -319,7 +303,7 @@ def calculate_x_coas(
                                 * intersection_factor
                         )
                     # old_x_coa = this_node_x_coa
-                    this_node_x_coa += x_coa * signal_strength
+                    this_node_x_coa += x_coa * coa_mag
                     # print("x_coa: {}".format(x_coa))
                     # print("signal_strength: {}".format(signal_strength))
                     # print(
@@ -335,16 +319,15 @@ def calculate_x_coas(
 @nb.jit(nopython=True)
 def calculate_chemoattractant_shielding_effect_factors(
         this_cell_ix,
-        nverts,
         num_cells,
         intercellular_dist_squared_matrix,
         line_segment_intersection_matrix,
         chemoattractant_shielding_effect_length,
 ):
     chemoattractant_shielding_effect_factors = np.zeros(
-        nverts, dtype=np.float64)
+        16, dtype=np.float64)
 
-    for ni in range(nverts):
+    for ni in range(16):
         this_node_relevant_line_seg_intersection_slice = \
             line_segment_intersection_matrix[
                 ni]
@@ -362,7 +345,7 @@ def calculate_chemoattractant_shielding_effect_factors(
                     this_node_relevant_dist_squared_slice[
                         other_ci]
 
-                for other_ni in range(nverts):
+                for other_ni in range(16):
                     if (
                             this_node_other_cell_relevant_line_seg_intersection_slice[
                                 other_ni] == 0):

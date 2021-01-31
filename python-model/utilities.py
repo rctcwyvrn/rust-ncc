@@ -28,10 +28,10 @@ def is_numeric(s):
 # @nb.jit(nopython=True)
 
 
-def make_verts_array_given_xs_and_ys(nverts, xs, ys):
-    verts = np.empty((nverts, 2), dtype=np.float64)
+def make_verts_array_given_xs_and_ys(xs, ys):
+    verts = np.empty((16, 2), dtype=np.float64)
 
-    for i in range(nverts):
+    for i in range(16):
         vert = verts[i]
         vert[0] = xs[i]
         vert[1] = ys[i]
