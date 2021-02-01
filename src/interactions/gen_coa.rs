@@ -29,7 +29,7 @@ pub struct CoaGenerator {
     dat: SymCcVvDat<VertexPairInfo>,
     contact_bbs: Vec<BBox>,
     contacts: SymCcDat<bool>,
-    params: CoaParams,
+    pub params: CoaParams,
 }
 
 /// Suppose we have a line segment `lseg`, which goes from vertex `vi_a` of cell `A`

@@ -87,7 +87,7 @@ pub struct InteractionGenerator {
     /// words, interactions that require cells to engage in physical
     /// contact.
     pub phys_contact_generator: PhysicalContactGenerator,
-    coa_generator: Option<CoaGenerator>,
+    pub coa_generator: Option<CoaGenerator>,
     chem_attr_generator: Option<ChemAttrGenerator>,
     bdry_generator: Option<BdryEffectGenerator>,
 }

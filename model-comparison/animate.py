@@ -2,37 +2,60 @@ from retrieve import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-init_rust_dat, rust_dat = process_data("rust", 1800, 2)
-init_py_dat, py_dat = process_data("python", 1800, 2)
+NUM_TSTEPS = 18
+NUM_CELLS = 2
+COA = 24
+CIL = 60
+NUM_INT_STEPS = 10
 
-rust_poly_per_cell_per_tstep = np.array(
-    dat_per_vert_per_cell_per_tstep("poly", rust_dat))
-rust_uivs_per_cell_per_tstep = np.array(
-    dat_per_vert_per_cell_per_tstep("uivs", rust_dat))
+py_out = get_py_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+rust_out = get_rust_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+
+check_header_equality(py_out, rust_out)
+
+py_data_dict_per_cell = gen_data_dict_per_cell(py_out)
+rust_data_dict_per_cell = gen_data_dict_per_cell(rust_out)
+
+rust_poly_per_cell_per_tstep = np.array([[rust_data_dict_per_cell[c]["poly"][t]
+                                          for c in range(NUM_CELLS)]
+                                         for t in range(NUM_TSTEPS)])
+rust_uivs_per_cell_per_tstep = np.array([[rust_data_dict_per_cell[c]["uivs"][t]
+                                          for c in range(NUM_CELLS)]
+                                         for t in range(NUM_TSTEPS)])
 rust_uovs_per_cell_per_step = -1 * rust_uivs_per_cell_per_tstep
-rust_rac_acts_per_cell_per_tstep = \
-    np.array(dat_per_vert_per_cell_per_tstep("rac_acts", rust_dat))
+rust_rac_acts_per_cell_per_tstep = np.array([[rust_data_dict_per_cell[c][
+                                                  "rac_acts"][t]
+                                              for c in range(NUM_CELLS)]
+                                             for t in range(NUM_TSTEPS)])
 rust_rac_act_arrows_per_cell_per_tstep = \
     50 * rust_rac_acts_per_cell_per_tstep[:, :, :, np.newaxis] * \
     rust_uovs_per_cell_per_step
-rust_rho_acts_per_cell_per_tstep = \
-    np.array(dat_per_vert_per_cell_per_tstep("rho_acts", rust_dat))
+rust_rho_acts_per_cell_per_tstep = np.array([[rust_data_dict_per_cell[c][
+                                                  "rho_acts"][t]
+                                              for c in range(NUM_CELLS)]
+                                             for t in range(NUM_TSTEPS)])
 rust_rho_act_arrows_per_cell_per_tstep = \
     50 * rust_rho_acts_per_cell_per_tstep[:, :, :, np.newaxis] * \
     rust_uivs_per_cell_per_tstep
 
-py_poly_per_cell_per_tstep = np.array(
-    dat_per_vert_per_cell_per_tstep("poly", py_dat))
-py_uivs_per_cell_per_tstep = np.array(
-    dat_per_vert_per_cell_per_tstep("uivs", py_dat))
+py_poly_per_cell_per_tstep = np.array([[py_data_dict_per_cell[c]["poly"][t]
+                                        for c in range(NUM_CELLS)]
+                                       for t in range(NUM_TSTEPS)])
+py_uivs_per_cell_per_tstep = np.array([[py_data_dict_per_cell[c]["uivs"][t]
+                                        for c in range(NUM_CELLS)]
+                                       for t in range(NUM_TSTEPS)])
 py_uovs_per_cell_per_step = -1 * py_uivs_per_cell_per_tstep
-py_rac_acts_per_cell_per_tstep = \
-    np.array(dat_per_vert_per_cell_per_tstep("rac_acts", py_dat))
+py_rac_acts_per_cell_per_tstep = np.array([[py_data_dict_per_cell[c][
+                                                "rac_acts"][t]
+                                            for c in range(NUM_CELLS)]
+                                           for t in range(NUM_TSTEPS)])
 py_rac_act_arrows_per_cell_per_tstep = \
     50 * py_rac_acts_per_cell_per_tstep[:, :, :, np.newaxis] * \
     py_uovs_per_cell_per_step
-py_rho_acts_per_cell_per_tstep = \
-    np.array(dat_per_vert_per_cell_per_tstep("rho_acts", py_dat))
+py_rho_acts_per_cell_per_tstep = np.array([[py_data_dict_per_cell[c][
+                                                "rho_acts"][t]
+                                            for c in range(NUM_CELLS)]
+                                           for t in range(NUM_TSTEPS)])
 py_rho_act_arrows_per_cell_per_tstep = \
     50 * py_rho_acts_per_cell_per_tstep[:, :, :, np.newaxis] * \
     py_uivs_per_cell_per_tstep
@@ -42,7 +65,7 @@ def paint(delta):
     global fig
     global ax
     global tstep
-    global num_tsteps
+    global NUM_TSTEPS
     ax.cla()
     ax.set_aspect('equal')
     ax.set_xlim([-40, 200])
@@ -108,7 +131,7 @@ def paint(delta):
                      linestyle="dotted")
 
     ax.set_title("frame {}".format(tstep))
-    tstep = (tstep + delta) % num_tsteps
+    tstep = (tstep + delta) % NUM_TSTEPS
     plt.show()
 
 
@@ -129,9 +152,7 @@ def on_press(event):
     fig.canvas.draw()
 
 
-num_tsteps = init_rust_dat["num_tsteps"]
 tstep = 0
 fig, ax = plt.subplots()
 fig.canvas.mpl_connect('key_press_event', on_press)
 paint(0)
-

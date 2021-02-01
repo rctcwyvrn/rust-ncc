@@ -1,37 +1,42 @@
 from retrieve import *
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
+import py_model.hardio as hio
 
-init_rust_dat, rust_dat = process_data("rust", 1800, 2)
-init_py_dat, py_dat = process_data("python", 1800, 2)
+NUM_TSTEPS = 18
+NUM_CELLS = 2
+COA = 24
+CIL = 60
+NUM_INT_STEPS = 10
 
-NUM_CELLS = init_py_dat["num_cells"]
-MAX_PLOT_TSTEP = init_py_dat["num_tsteps"]
+py_out = get_py_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+rust_out = get_rust_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+
+check_header_equality(py_out, rust_out)
+
+MAX_PLOT_TSTEP = NUM_TSTEPS
 
 EXTRA_LABELS = ["centroid"]
 EXTRA_COLORS = ["black"]
 
 IGNORE_LABELS = ["uivs"]
 
-dict_rust_dat_per_cell = \
-    [dict([(label, dat_per_vert_per_tstep(label, cell_ix, rust_dat))
-           for label in DATA_LABELS if label not in IGNORE_LABELS]) for cell_ix
-     in
-     range(NUM_CELLS)]
-dict_py_dat_per_cell = \
-    [dict([
-        (label, dat_per_vert_per_tstep(label, cell_ix, py_dat))
-        for label in DATA_LABELS if label not in IGNORE_LABELS]) for cell_ix in
-        range(NUM_CELLS)]
+py_dat = py_out["tsteps"]
+rust_dat = rust_out["tsteps"]
 
 
-def calc_extras(dict_dat):
+py_data_dict_per_cell = gen_data_dict_per_cell(py_dat)
+rust_data_dict_per_cell = gen_data_dict_per_cell(rust_dat)
+
+
+def calc_extras(data_dict):
     global EXTRA_LABELS
     extra_dat = []
     for extra in EXTRA_LABELS:
         if extra == "centroid":
-            poly_per_vert_per_int_step = dict_dat["poly"]
-            centroids = np.average(poly_per_vert_per_int_step, axis=1)
+            poly_per_int_step = data_dict["poly"]
+            centroids = np.average(poly_per_int_step, axis=1)
             centroid_dists = np.linalg.norm(centroids, axis=1)
             extra_dat.append(centroid_dists)
 
@@ -39,34 +44,36 @@ def calc_extras(dict_dat):
 
 
 for cell_ix in range(NUM_CELLS):
-    for extra_label, extra_rust_dat, extra_py_dat in zip(EXTRA_LABELS,
+    for extra_label, extra_py_dat, extra_rust_dat in zip(EXTRA_LABELS,
                                                          calc_extras(
-                                                                 dict_rust_dat_per_cell[cell_ix]),
+                                                             py_data_dict_per_cell[
+                                                                 cell_ix]),
                                                          calc_extras(
-                                                             dict_py_dat_per_cell[cell_ix])):
-        dict_rust_dat_per_cell[cell_ix][extra_label] = extra_rust_dat
-        dict_py_dat_per_cell[cell_ix][extra_label] = extra_py_dat
+                                                             rust_data_dict_per_cell[
+                                                                 cell_ix])):
+        py_data_dict_per_cell[cell_ix][extra_label] = extra_py_dat
+        rust_data_dict_per_cell[cell_ix][extra_label] = extra_rust_dat
 
 # Norm vector data.
 for cell_ix in range(NUM_CELLS):
-    for dict_dat in [dict_rust_dat_per_cell[cell_ix],
-                     dict_py_dat_per_cell[cell_ix]]:
-        for label in DATA_LABELS:
+    for data_dict in [py_data_dict_per_cell[cell_ix],
+                      rust_data_dict_per_cell[cell_ix]]:
+        for label in hio.DATA_LABELS:
             if label == "poly" or "forces" in label:
-                orig = dict_dat[label]
-                normed = np.linalg.norm(dict_dat[label], axis=2)
-                dict_dat[label] = normed
+                orig = data_dict[label]
+                normed = np.linalg.norm(data_dict[label], axis=2)
+                data_dict[label] = normed
 
 DATA_GROUPS = [["poly", "centroid"], ["kgtps_rac", "kdgtps_rac",
                                       "kgtps_rho", "kdgtps_rho"],
-               ["tot_forces", "rgtp_forces", "edge_forces",
+               ["sum_forces", "rgtp_forces", "edge_forces",
                 "cyto_forces"],
                ["rac_acts", "rac_inacts", "rho_acts", "rho_inacts"],
                ["rac_act_net_fluxes"], ["conc_rac_acts"], ["x_cils"],
                ["x_coas"], ["edge_strains"], ["poly_area"]]
 
 unmatched_labels = []
-for label in DATA_LABELS + EXTRA_LABELS:
+for label in hio.DATA_LABELS + EXTRA_LABELS:
     if label in IGNORE_LABELS:
         continue
     else:
@@ -114,7 +121,8 @@ def calculate_data_group_min_maxes(group_to_label, dict_rust_dat_per_cell,
         for label in label_group:
             for cell_ix in range(NUM_CELLS):
                 if cell_ix == focus_cell or focus_cell == "all":
-                    dat = np.append(dat, dict_rust_dat_per_cell[cell_ix][label][
+                    dat = np.append(dat, dict_rust_dat_per_cell[cell_ix][
+                                             label][
                                          :max_int_step])
                     dat = np.append(dat, dict_py_dat_per_cell[cell_ix][label][
                                          :max_int_step])
@@ -128,7 +136,8 @@ def calculate_label_min_maxes(dict_rust_dat_per_cell, dict_py_dat_per_cell,
     group_to_label, label_to_group = group_labels()
     group_min_maxes = \
         calculate_data_group_min_maxes(group_to_label, dict_rust_dat_per_cell,
-                                       dict_py_dat_per_cell, max_int_step, focus_cell)
+                                       dict_py_dat_per_cell, max_int_step,
+                                       focus_cell)
     label_min_maxes = []
     for group_ix in label_to_group:
         label_min_maxes.append(group_min_maxes[group_ix])
@@ -147,7 +156,7 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
     ax.cla()
 
     VERTEX_PLOT_IX = (VERTEX_PLOT_IX + delta_vx) % len(VERTEX_PLOT_TYPE)
-    DATA_TYPE_IX = (DATA_TYPE_IX + delta_dt) % len(DATA_LABELS)
+    DATA_TYPE_IX = (DATA_TYPE_IX + delta_dt) % len(hio.DATA_LABELS)
     CELL_PLOT_IX = (CELL_PLOT_IX + delta_cx) % len(CELL_PLOT_TYPE)
     MAX_PLOT_TSTEP += delta_mp
 
@@ -164,8 +173,8 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
 
     for m in range(NUM_CELLS):
         if m == cell or cell == "all":
-            dict_rust_dat = dict_rust_dat_per_cell[m]
-            dict_py_dat = dict_py_dat_per_cell[m]
+            dict_py_dat = py_data_dict_per_cell[m]
+            dict_rust_dat = rust_data_dict_per_cell[m]
             if len(dict_rust_dat[label].shape) == 1:
                 ax.plot(
                     dict_rust_dat[label][:MAX_PLOT_TSTEP],
@@ -174,7 +183,7 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
                     dict_py_dat[label][:MAX_PLOT_TSTEP],
                     color=color,
                     linestyle="dashed")
-                #ax.set_ylim(ALL_LABEL_MAXES[label])
+                # ax.set_ylim(ALL_LABEL_MAXES[label])
             else:
                 for n in range(16):
                     if n == vert or vert == "all":
@@ -184,7 +193,7 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
                         ax.plot(dict_py_dat[label][
                                 :MAX_PLOT_TSTEP, n], color=color,
                                 linestyle="dashed")
-                        #ax.set_ylim(ALL_LABEL_MAXES[label])
+                        # ax.set_ylim(ALL_LABEL_MAXES[label])
 
     ax.set_title("{}, vert: {}, cell: {}".format(label, vert, cell))
 
@@ -224,16 +233,23 @@ def on_press(event):
 
 VERTEX_PLOT_TYPE = [n for n in range(16)] + ["all"]
 CELL_PLOT_TYPE = [m for m in range(NUM_CELLS)] + ["all"]
-ALL_LABELS = [label for label in DATA_LABELS + EXTRA_LABELS if
+ALL_LABELS = [label for label in hio.DATA_LABELS + EXTRA_LABELS if
               label not in IGNORE_LABELS]
-ALL_COLORS = DATA_COLORS + EXTRA_COLORS
+ALL_COLORS = [color for (label, color) in zip(hio.DATA_LABELS + EXTRA_LABELS,
+                                              hio.DATA_COLORS + EXTRA_COLORS) if
+              label not in IGNORE_LABELS]
 group_to_label, label_to_group = group_labels()
-ALL_LABEL_MAXES = calculate_label_min_maxes(dict_rust_dat_per_cell,
-                                            dict_py_dat_per_cell,
+ALL_LABEL_MAXES = calculate_label_min_maxes(py_data_dict_per_cell,
+                                            rust_data_dict_per_cell,
                                             MAX_PLOT_TSTEP, "all")
-VERTEX_PLOT_IX = 16 # set initially to plot all
-CELL_PLOT_IX = NUM_CELLS # set initially to plot all
-DATA_TYPE_IX = 0
-fig, ax = plt.subplots()
-paint(0, 0, 0, 0)
-fig.canvas.mpl_connect('key_press_event', on_press)
+# VERTEX_PLOT_IX = 16  # set initially to plot all
+# CELL_PLOT_IX = NUM_CELLS  # set initially to plot all
+# DATA_TYPE_IX = 0
+# fig, ax = plt.subplots()
+# paint(0, 0, 0, 0)
+# fig.canvas.mpl_connect('key_press_event', on_press)
+
+poly_per_tstep = py_data_dict_per_cell[0]["poly"]
+print(poly_per_tstep.shape)
+plt.plot(py_data_dict_per_cell[0]["poly"][:, 1])
+print(py_data_dict_per_cell[0]["poly"][:, 0])

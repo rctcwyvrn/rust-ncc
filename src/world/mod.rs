@@ -5,6 +5,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+pub mod pyio;
+
 #[cfg(feature = "validate")]
 use crate::cell::confirm_volume_exclusion;
 use crate::cell::states::CoreState;
@@ -16,13 +18,12 @@ use crate::interactions::{
 use crate::math::v2d::V2D;
 use crate::parameters::{CharQuantities, Parameters, WorldParameters};
 use crate::utils::pcg32::Pcg32;
+use crate::world::pyio::Writer;
 use crate::NVERTS;
-use rand::seq::SliceRandom;
+
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cells {
@@ -34,37 +35,33 @@ impl Cells {
     fn simulate(
         &self,
         tstep: u32,
-        n_int_steps: u32,
+        num_int_steps: u32,
         rng: &mut Pcg32,
         world_parameters: &WorldParameters,
         group_parameters: &[Parameters],
         interaction_generator: &mut InteractionGenerator,
-        out_file: &mut File,
+        writer: &mut Writer,
     ) -> Result<Cells, String> {
         let mut new_cell_states = vec![self.states[0]; self.states.len()];
         let shuffled_cells = {
-            let mut crs = self.states.iter().collect::<Vec<&Cell>>();
+            let crs = self.states.iter().collect::<Vec<&Cell>>();
             // crs.shuffle(rng);
             crs
         };
-        writeln!(out_file, "==============================").unwrap();
         for cell_state in shuffled_cells {
             let ci = cell_state.ix;
             let contact_data = interaction_generator.get_contact_data(ci);
 
-            writeln!(out_file, "++++++++++++++++++++++++++++++").unwrap();
-            writeln!(out_file, "ci: {}", ci).unwrap();
             let new_cell_state = cell_state.simulate_euler(
                 tstep,
-                n_int_steps,
+                num_int_steps,
                 &self.interactions[ci],
                 contact_data,
                 world_parameters,
                 &group_parameters[cell_state.group_ix],
                 rng,
-                out_file,
+                writer,
             )?;
-            writeln!(out_file, "++++++++++++++++++++++++++++++").unwrap();
 
             interaction_generator.update(ci, &new_cell_state.core.poly);
 
@@ -77,7 +74,6 @@ impl Cells {
 
             new_cell_states[ci] = new_cell_state;
         }
-        writeln!(out_file, "==============================").unwrap();
         let rel_rgtps = new_cell_states
             .iter()
             .map(|c| {
@@ -123,6 +119,7 @@ pub struct World {
     cells: Cells,
     interaction_generator: InteractionGenerator,
     pub rng: Pcg32,
+    writer: Writer,
 }
 
 fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
@@ -229,6 +226,7 @@ impl World {
             cells,
             interaction_generator,
             rng,
+            writer: Writer::default(),
         }
     }
 
@@ -242,38 +240,46 @@ impl World {
 
     pub fn simulate(&mut self, final_tpoint: f32) {
         let num_tsteps = (final_tpoint / self.char_quants.time()).ceil() as u32;
-        let mut f = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(format!(
-                "B:\\rust-ncc\\model-comparison\\rust-out\\out_euler_T={}_NC={}.dat",
-                num_tsteps,
-                self.cells.states.len()
-            ))
-            .unwrap();
-        let n_int_steps = 10;
-        writeln!(f, "******************************").unwrap();
-        writeln!(f, "num_tsteps: {}", num_tsteps).unwrap();
-        writeln!(f, "num_cells: {}", self.cells.states.len()).unwrap();
-        writeln!(f, "num_int_steps: {}", n_int_steps).unwrap();
-        writeln!(f, "******************************").unwrap();
+        let num_int_steps = 10;
+        let mut writer = self.writer.init(
+            num_tsteps as usize,
+            num_int_steps as usize,
+            self.cells.states.len(),
+            self.world_params.interactions.phys_contact.cil_mag as u32,
+            self.world_params
+                .interactions
+                .coa
+                .map_or_else(|| 0, |p| (p.mag as f32 * NVERTS as f32) as u32),
+        );
+        writer.save_header(
+            &self.char_quants,
+            &self.world_params,
+            &self.group_params[0],
+        );
         while self.tstep < num_tsteps {
             let new_cells: Cells = self
                 .cells
                 .simulate(
                     self.tstep,
-                    n_int_steps,
+                    num_int_steps,
                     &mut self.rng,
                     &self.world_params,
                     &self.group_params,
                     &mut self.interaction_generator,
-                    &mut f,
+                    &mut writer,
                 )
                 .unwrap();
 
             self.cells = new_cells;
             self.tstep += 1;
+        }
+        if !writer.finished {
+            panic!(
+                format!(
+                    "Unfinished writer. num_tsteps to store: {}, num_tsteps stored: {}", 
+                    writer.num_tsteps, writer.data.tsteps.len()
+                )
+            )
         }
     }
 }

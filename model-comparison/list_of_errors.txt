@@ -10,8 +10,13 @@ Should be 0.5f32.ln() / range, not 0.5f32.ln() / (range * 0.5)
 
 * in gen_coa, fix so that *x_coa[i] += ..., not *x_coa[i] = ...
 
+* replace line segment calculations with new ones in python-compare, just to be sure
+
 Following are not errors, but recommended changes:
 1) remove char kgtp/kdgtp, and only have char kgtp
 2) rename halfmax_vertex_rgtp_act to halfmax_vertex_rgtp
 3) remove tot_rac, tot_rho
 4) replace tot_rgtp with 1.0
+5) should move k_mem_on/k_mem_off out of CharQuants and 
+    into WorldParameters
+6) 

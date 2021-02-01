@@ -713,7 +713,7 @@ class Cell:
 
         output_array = dynamics.eulerint(
             dynamics.cell_dynamics, state_array, np.array([0, 1]),
-            rhs_args, self.num_int_steps, writer)
+            rhs_args, self.num_int_steps, self.cell_ix, writer)
 
         next_state_array = output_array[1]
 

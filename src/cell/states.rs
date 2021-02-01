@@ -261,7 +261,7 @@ impl Display for MechState {
         writeln!(f, "avg_tens_strain: {}", self.avg_tens_strain)?;
         fmt_var_arr(f, "edge_forces", &self.edge_forces)?;
         fmt_var_arr(f, "cyto_forces", &self.cyto_forces)?;
-        fmt_var_arr(f, "tot_forces", &self.sum_forces)
+        fmt_var_arr(f, "sum_forces", &self.sum_forces)
     }
 }
 

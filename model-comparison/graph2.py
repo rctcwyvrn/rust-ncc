@@ -24,9 +24,9 @@ def calc_extras(dict_dat):
     return extra_dat
 
 
-dict_rust_dat = dict([(label, dat_per_vert_per_int_step(label, 0, rust_dat))
+dict_rust_dat = dict([(label, get_label_data_for_cell_per_int_step(label, 0, rust_dat))
                       for label in DATA_LABELS if label not in IGNORE_LABELS])
-dict_py_dat = dict([(label, dat_per_vert_per_int_step(label, 0, py_dat))
+dict_py_dat = dict([(label, get_label_data_for_cell_per_int_step(label, 0, py_dat))
                     for label in DATA_LABELS if label not in IGNORE_LABELS])
 
 for extra_label, extra_rust_dat, extra_py_dat in zip(EXTRA_LABELS, calc_extras(
@@ -44,7 +44,7 @@ for dict_dat in [dict_rust_dat, dict_py_dat]:
 
 DATA_GROUPS = [["poly", "centroid"], ["kgtps_rac", "kdgtps_rac",
                                       "kgtps_rho", "kdgtps_rho"],
-               ["tot_forces", "rgtp_forces", "edge_forces",
+               ["sum_forces", "rgtp_forces", "edge_forces",
                 "cyto_forces"],
                ["rac_acts", "rac_inacts", "rho_acts", "rho_inacts"],
                ["rac_act_net_fluxes"], ["conc_rac_acts"], ["x_cils"],

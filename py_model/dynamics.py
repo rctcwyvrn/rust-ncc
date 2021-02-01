@@ -68,7 +68,7 @@ def calculate_sum(num_elements, sequence):
 
 
 # ----------------------------------------------------------------------------------------
-def eulerint(f, current_state, tpoints, args, num_int_steps, writer):
+def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix, writer):
     num_tpoint_pairs = tpoints.shape[0] - 1
     tpoint_pairs = np.zeros((num_tpoint_pairs, 2), dtype=np.float64)
     states = np.zeros(
@@ -82,25 +82,25 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, writer):
         j = 2 * i
         tpoint_pairs[i] = tpoints[j:j + 2]
 
+    writer.confirm_int_steps_empty()
     for i in range(tpoint_pairs.shape[0]):
         init_t, end_t = tpoint_pairs[i]
         current_state = states[i]
         dt = (end_t - init_t) / num_int_steps
 
         for j in range(num_int_steps):
-            current_state = current_state + dt * f(writer, current_state, *args)
+            current_state = current_state + dt * f(writer,
+                                                   cell_ix, current_state,
+                                                   *args)
 
         states[i + 1] = current_state
-    writer.confirm_int_steps_saved()
 
     return states
 
 
-# @nb.jit()
-
-
 def cell_dynamics(
         writer,
+        cell_ix,
         state_array,
         num_phase_vars,
         rac_acts_ix,
@@ -360,7 +360,7 @@ def cell_dynamics(
             ("rac_inacts", [float(v) for v in rac_inacts]),
             ("rho_acts", [float(v) for v in rho_acts]),
             ("rho_inacts", [float(v) for v in rho_inact]),
-            ("tot_forces", [list([float(x), float(y)]) for x, y in zip(sum_forces_x, sum_forces_y)]),
+            ("sum_forces", [list([float(x), float(y)]) for x, y in zip(sum_forces_x, sum_forces_y)]),
             ("uivs", [[float(v) for v in x] for x in uivs]),
             ("rgtp_forces", [[float(v) for v in x] for x in rgtp_forces]),
             ("edge_forces", [[float(v) for v in x] for x in edge_forces_plus]),
@@ -374,10 +374,10 @@ def cell_dynamics(
             ("x_coas", [float(v) for v in x_coas]),
             ("rac_act_net_fluxes", [float(v) for v in diffusion_rac_acts]),
             ("edge_strains", [float(v) for v in edge_strains]),
-            ("poly_area", [float(poly_area)] * 16)]
+            ("poly_area", poly_area)]
     # for d in data:
     #     print("{}: {}".format(d[0], d[1]))
-    writer.save_int_step(data)
+    writer.save_int_step(cell_ix, data)
 
     for ni in range(16):
         new_coord = new_verts[ni]

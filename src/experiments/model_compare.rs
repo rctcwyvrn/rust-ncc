@@ -87,7 +87,11 @@ fn raw_world_parameters(_char_quants: &CharQuantities) -> RawWorldParameters {
     RawWorldParameters {
         vertex_eta: gen_default_viscosity(),
         interactions: RawInteractionParams {
-            coa: None,
+            coa: Some(RawCoaParams {
+                los_penalty: 2.0,
+                range: Length(220.0).micro(),
+                mag: 24.0,
+            }),
             chem_attr: None,
             bdry: None,
             phys_contact: RawPhysicalContactParams {

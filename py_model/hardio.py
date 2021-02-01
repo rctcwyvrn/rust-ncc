@@ -18,24 +18,29 @@ HEADER_LABELS = ["num_tsteps", "num_cells", "num_int_steps", "eta",
                  "kgtp_rho_auto", "kdgtp_rho", "kdgtp_rac_on_rho",
                  "randomization", "rand_avg_t", "rand_std_t", "rand_mag",
                  "num_rand_vs", "total_rgtp"]
-BASICS = ["poly", "rac_acts", "rac_inacts", "rho_acts",
-          "rho_inacts", "tot_forces"]
-BASIC_COLORS = ["black", "blue", "slateblue", "red", "indianred",
-                "tab:blue"]
+BASICS = ["poly", "rac_acts", "rac_inacts", "rho_acts", "rho_inacts",
+          "sum_forces"]
+BASICS_COLORS = ["black", "blue", "slateblue", "red", "indianred", "tab:blue"]
 GEOMETRY = ["uivs"]
 GEOMETRY_COLORS = ["black"]
 RAC_RATES = ["kgtps_rac", "kdgtps_rac"]
-RAC_RATE_COLORS = ["deepskyblue", "violet"]
+RAC_RATES_COLORS = ["deepskyblue", "violet"]
 RHO_RATES = ["kgtps_rho", "kdgtps_rho"]
-RHO_RATE_COLORS = ["orangered", "lightblue"]
+RHO_RATES_COLORS = ["orangered", "lightblue"]
 FORCES = ["rgtp_forces", "edge_forces", "cyto_forces"]
-FORCE_COLORS = ["darkolivegreen", "steelblue", "mediumvioletred"]
+FORCES_COLORS = ["darkolivegreen", "steelblue", "mediumvioletred"]
 CALC_KGTPS_RAC = ["conc_rac_acts", "x_cils", "x_coas"]
 CALC_KGTPS_RAC_COLORS = ["blueviolet", "gold", "lightseagreen"]
 DIFFUSION = ["rac_act_net_fluxes"]
 DIFFUSION_COLORS = ["teal"]
 OTHERS = ["edge_strains", "poly_area"]
-OTHER_COLORS = ["tab:orange", "green"]
+OTHERS_COLORS = ["tab:orange", "green"]
+
+DATA_LABELS = BASICS + GEOMETRY + RAC_RATES + RHO_RATES + FORCES + \
+              CALC_KGTPS_RAC + DIFFUSION + OTHERS
+DATA_COLORS = BASICS_COLORS + GEOMETRY_COLORS + RAC_RATES_COLORS + \
+              RHO_RATES_COLORS + FORCES_COLORS + CALC_KGTPS_RAC_COLORS + \
+              DIFFUSION_COLORS + OTHERS_COLORS
 
 WRITE_FOLDER = "B:\\rust-ncc\\model-comparison\\py-out\\"
 WRITE_FILE_NAME_TEMPLATE = "out_euler_T={}_E={}_NC={}_CIL={}_COA={}.dat"
@@ -112,54 +117,50 @@ class Writer:
 
         self.int_step_buffer = []
         self.current_cell_ix = 0
-        self.empty_tstep_data = dict([("cell_ix", 0), ("int_steps", [])])
-        self.current_tstep_data = copy.deepcopy(self.empty_tstep_data)
-        self.tstep_buffer = []
+        self.tstep_buffer = dict([(ix, list()) for ix in range(self.num_cells)])
         self.main_buffer = dict([("header", {}), ("tsteps", [])])
         self.finished = False
 
-        self.int_steps_saved = True
-        self.tstep_saved = True
         self.__init_writer()
 
     def __init_writer(self):
         self.write_file_path = self.write_file_path_template.format(
             self.params["num_tsteps"], self.params["num_int_steps"],
             self.params["num_cells"],
-            self.params["cil_mag"], self.params["coa_mag"]
+            int(self.params["cil_mag"]), int(self.params["coa_mag"])
         )
         if os.path.exists(self.write_file_path):
             os.remove(self.write_file_path)
         self.finished = False
 
-    def save_int_step(self, data):
-        self.int_steps_saved = False
+    def confirm_int_steps_empty(self):
+        if len(self.int_step_buffer) != 0:
+            raise Exception("int steps buffer is not empty")
+
+    def save_int_step(self, cell_ix, data):
+        if self.current_cell_ix is not None:
+            assert(self.current_cell_ix == cell_ix)
+        else:
+            self.current_cell_ix = cell_ix
         validate_data(self.data_labels, data)
         self.int_step_buffer.append(dict(copy.deepcopy(data)))
         if len(self.int_step_buffer) == self.num_int_steps:
-            self.__save_cell_tstep()
-            self.int_steps_saved = True
+            self.__save_cell_tstep(cell_ix)
 
-    def confirm_int_steps_saved(self):
-        if not self.int_steps_saved:
-            raise Exception("Expected {} int steps, but only have {}".format(
-                self.num_int_steps, len(self.int_step_buffer)))
-
-    def __save_cell_tstep(self):
-        validate_buffer(self.num_int_steps, self.int_step_buffer, "INT_STEP_BUFFER")
-        self.tstep_buffer.append(copy.deepcopy(self.int_step_buffer))
+    def __save_cell_tstep(self, cell_ix):
+        validate_buffer(self.num_int_steps, self.int_step_buffer,
+                        "INT_STEP_BUFFER")
+        self.tstep_buffer[cell_ix] = copy.deepcopy(self.int_step_buffer)
         self.int_step_buffer = []
+        self.current_cell_ix = None
         if len(self.tstep_buffer) == self.num_cells:
-            self.__finish_tstep_buffer()
+            self.__save_tstep()
 
-    def __finish_tstep_buffer(self):
-        self.__save_tsteps()
-        self.tstep_buffer = []
-
-    def __save_tsteps(self):
+    def __save_tstep(self):
         if not self.finished:
             validate_buffer(self.num_cells, self.tstep_buffer, "TSTEP_BUFFER")
             self.main_buffer["tsteps"].append(copy.deepcopy(self.tstep_buffer))
+            self.tstep_buffer = dict([(ix, list()) for ix in range(self.num_cells)])
             if len(self.main_buffer["tsteps"]) == self.num_tsteps:
                 with open(self.write_file_path, "wb") as f:
                     f.write(orjson.dumps(self.main_buffer))
