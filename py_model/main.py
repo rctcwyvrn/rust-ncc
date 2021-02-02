@@ -2,11 +2,11 @@ import experiment_templates as ets
 import hardio as fw
 import numpy as np
 
-TIME_IN_HOURS = 0.01
+TIME_IN_HOURS = 1.0
 T = 2.0
 L = 1e-6
 F = 1e-9
-ETA = 2.9 * 10000.0
+ETA = 0.1
 L3D = 10e-6
 K_MEM_ON = 0.02
 K_MEM_OFF = 0.15
@@ -41,7 +41,7 @@ params = dict([
     ("cil_mag", CIL),
     ("coa_mag", COA),
     ("coa_los_penalty", 2.0),
-    ("coa_range", 110e-6),
+    ("coa_range", 220e-6),
     ("close_zero_at", 1.5e-6),
     ("close_one_at", 0.5e-6),
     ("randomization", False),
@@ -58,7 +58,7 @@ params = dict([
     ("stiffness_cyto", 1e-5),
     ("force_rho", 0.2),
     ("rand_avg_t", 40.0),
-    ("rand_std_t", 0.25 * 40.0),
+    ("rand_std_t", 0.1 * 40.0),
     ("rand_mag", 10.0),
     ("kgtp_rac", 24.0),
     ("kgtp_rho", 28.0),
@@ -78,7 +78,8 @@ params = dict([
     ("num_rand_vs", 16 * 0.25),
     ("total_rgtp", 1.0),
     ("init_rac", INIT_RAC),
-    ("init_rho", np.roll(INIT_RAC, 8))
+    ("init_rho", np.roll(INIT_RAC, 8)),
+    ("vertex_eta", 2.9),
 ])
 
 # coa_dict = {

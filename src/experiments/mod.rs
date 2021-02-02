@@ -99,10 +99,9 @@ fn gen_default_raw_params(
     rng: &mut Pcg32,
     randomization: bool,
 ) -> RawParameters {
-    let rgtp_d = (Length(0.1_f32.sqrt()).micro().pow(2.0).g()
-        / Time(1.0).g())
-    .to_diffusion()
-    .unwrap();
+    let rgtp_d = (Length(0.1_f32.sqrt()).micro().pow(2.0).g() / Time(1.0).g())
+        .to_diffusion()
+        .unwrap();
     let mut specific_rac = [false; NVERTS];
     specific_rac.iter_mut().enumerate().for_each(|(i, x)| {
         if i < 4 {
@@ -163,7 +162,7 @@ fn gen_default_raw_params(
         kdgtp_rac_on_rho: 400.0,
         randomization,
         rand_avg_t: Time(40.0 * 60.0),
-        rand_std_t: Time(0.2 * 40.0 * 60.0),
+        rand_std_t: Time(0.1 * 40.0 * 60.0),
         rand_mag: 10.0,
         rand_vs: 0.25,
         init_rac,
@@ -177,8 +176,8 @@ fn gen_default_raw_params(
 ///
 /// See SI for justification.
 //TODO: put justification here.
-fn gen_default_viscosity() -> Viscosity {
-    Viscosity(0.29).mul_number(1.0 / (NVERTS as f32))
+fn gen_default_vertex_viscosity(char_quants: &CharQuantities) -> Viscosity {
+    char_quants.eta.mul_number(2.9 / (NVERTS as f32))
 }
 
 fn gen_default_phys_contact_dist() -> Length {

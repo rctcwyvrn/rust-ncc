@@ -98,8 +98,9 @@ parameter_labels = ["cell_r",
 def refine_raw_params(raw_params):
     params = copy.deepcopy(raw_params)
 
+    params["coa_mag"] = raw_params["coa_mag"] / 16
     params["coa_range"] = raw_params["coa_range"] / params["l"]
-    params["coa_distrib_exp"] = (np.log(0.5) / params["coa_range"])
+    params["coa_distrib_exp"] = (np.log(0.5) / (0.5 * params["coa_range"]))
     params["init_cyto_rgtp"] = 1 - raw_params["init_inact_rgtp"] - \
                                     raw_params["init_act_rgtp"]
     # --------------
@@ -120,19 +121,20 @@ def refine_raw_params(raw_params):
     # --------------
     params["kdgtp_rho_on_rac"] = (
             params["kdgtp"]
-            * raw_params["kdgtp_rho_on_rac"]
+            * raw_params["kdgtp_rho_on_rac"] * params["t"]
     )  # per second
     params["kdgtp_rac_on_rho"] = (
             params["kdgtp"]
-            * raw_params["kdgtp_rac_on_rho"]
+            * raw_params["kdgtp_rac_on_rho"] * params["t"]
     )  # per second
     # --------------
     params["k_mem_off"] = (
-            params["k_mem_off"] * raw_params["kgdi"]
+            params["k_mem_off"] * raw_params["kgdi"] * params["t"]
     )  # per second
     params["k_mem_on_vertex"] = (
-            params["k_mem_on"] * raw_params["kdgdi"] / 16
+            params["k_mem_on"] * raw_params["kdgdi"] * params["t"] / 16
     )  # per second
+    del params["k_mem_on"]
     # --------------
     params["diffusion_rgtp"] = \
         raw_params["diffusion_rgtp"] * (params["t"] / (params["l"] ** 2))
@@ -158,8 +160,7 @@ def refine_raw_params(raw_params):
     params["halfmax_vertex_rgtp_conc"] = params["halfmax_vertex_rgtp_act"] / \
                                       params["rest_edge_len"]
 
-    params["vertex_eta"] = \
-        (params["eta"] * params["l3d"] / 16) / \
+    params["vertex_eta"] = (params["vertex_eta"] * params["eta"] / 16) / \
         (params["f"] / (params["l"] / params["t"]))
     params["stiffness_edge"] = \
         raw_params["stiffness_edge"] * \
@@ -173,7 +174,7 @@ def refine_raw_params(raw_params):
             raw_params["force_rho"]
             * params["const_protrusive"]
     )
-    params["stiffness_cyto"] = raw_params["stiffness_cyto"] / params["f"]
+    params["stiffness_cyto"] = raw_params["stiffness_cyto"] / params["f"] / 16
     # --------------
     params["close_zero_at"] = raw_params["close_zero_at"] / params["l"]
     params["close_one_at"] = raw_params["close_one_at"] / params["l"]
@@ -219,39 +220,3 @@ def expand_x_cils_array(
                   ) * [intercellular_contact_factor_mag]
 
     return np.array(x_cils)
-
-
-# ==============================================================
-
-
-def expand_coa_mag_array(
-        num_cell_groups, cell_group_defs, this_cell_group_def
-):
-    coa_mag_def = this_cell_group_def[
-        "coa_mag"
-    ]
-
-    num_defs = len(list(coa_mag_def.keys()))
-
-    if num_defs != num_cell_groups:
-        raise Exception(
-            "Number of cell groups does not equal number of keys in x_cils_def."
-        )
-
-    coa_mag = []
-    for cgi in range(num_cell_groups):
-        cg = cell_group_defs[cgi]
-        cg_name = cg["group_name"]
-        cg_nverts = this_cell_group_def["params"]["16"]
-        x_coa_strength = (
-                coa_mag_def[cg_name] / cg_nverts
-        )
-
-        coa_mag += (
-                                                    cell_group_defs[cgi][
-                                                        "num_cells"]) * [
-                                                    x_coa_strength]
-
-    return np.array(coa_mag)
-
-# ==============================================================

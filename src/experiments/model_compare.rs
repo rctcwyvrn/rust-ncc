@@ -1,7 +1,7 @@
 use crate::experiments::{
     gen_default_char_quants, gen_default_phys_contact_dist,
-    gen_default_raw_params, gen_default_viscosity, CellGroup, Experiment,
-    GroupBBox,
+    gen_default_raw_params, gen_default_vertex_viscosity, CellGroup,
+    Experiment, GroupBBox,
 };
 use crate::interactions::dat_sym2d::SymCcDat;
 use crate::math::v2d::V2D;
@@ -72,7 +72,7 @@ fn gen_cil_mat() -> SymCcDat<f32> {
 
 /// Generate raw world parameters, in particular, how
 /// cells interact with each other, and any boundaries.
-fn raw_world_parameters(_char_quants: &CharQuantities) -> RawWorldParameters {
+fn raw_world_parameters(char_quants: &CharQuantities) -> RawWorldParameters {
     // Some(RawCoaParams {
     //     los_penalty: 2.0,
     //     range: Length(100.0).micro(),
@@ -84,8 +84,9 @@ fn raw_world_parameters(_char_quants: &CharQuantities) -> RawWorldParameters {
     //                 range: Length(220.0).micro(),
     //                 mag: 24.0,
     //             })
+    let vertex_eta = gen_default_vertex_viscosity(char_quants);
     RawWorldParameters {
-        vertex_eta: gen_default_viscosity(),
+        vertex_eta: gen_default_vertex_viscosity(char_quants),
         interactions: RawInteractionParams {
             coa: Some(RawCoaParams {
                 los_penalty: 2.0,

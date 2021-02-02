@@ -286,7 +286,7 @@ class Environment:
             environment_cells,
     ):
         execution_sequence = self.cell_indices
-        np.random.shuffle(execution_sequence)
+        # np.random.shuffle(execution_sequence)
 
         self.exec_orders[t] = np.copy(execution_sequence)
 

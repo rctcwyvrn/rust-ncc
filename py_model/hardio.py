@@ -4,8 +4,7 @@ import orjson
 import numpy as np
 
 HEADER_LABELS = ["num_tsteps", "num_cells", "num_int_steps", "eta",
-                 "f", "l", "t", "l3d", "k_mem_off",
-                 "k_mem_on", "kgtp", "kdgtp", "close_zero_at",
+                 "f", "l", "t", "l3d", "kgtp", "kdgtp", "close_zero_at",
                  "close_one_at", "cil_mag", "coa_los_penalty", "coa_range",
                  "coa_mag", "coa_distrib_exp", "vertex_eta", "cell_r",
                  "rest_edge_len", "rest_area", "stiffness_edge",
@@ -116,8 +115,8 @@ class Writer:
         self.coa_mag = self.params["coa_mag"]
 
         self.int_step_buffer = []
-        self.current_cell_ix = 0
-        self.tstep_buffer = dict([(ix, list()) for ix in range(self.num_cells)])
+        self.current_cell_ix = None
+        self.tstep_buffer = [list() for _ in range(self.num_cells)]
         self.main_buffer = dict([("header", {}), ("tsteps", [])])
         self.finished = False
 
@@ -127,7 +126,7 @@ class Writer:
         self.write_file_path = self.write_file_path_template.format(
             self.params["num_tsteps"], self.params["num_int_steps"],
             self.params["num_cells"],
-            int(self.params["cil_mag"]), int(self.params["coa_mag"])
+            int(self.params["cil_mag"]), int(self.params["coa_mag"] * 16)
         )
         if os.path.exists(self.write_file_path):
             os.remove(self.write_file_path)
@@ -153,14 +152,15 @@ class Writer:
         self.tstep_buffer[cell_ix] = copy.deepcopy(self.int_step_buffer)
         self.int_step_buffer = []
         self.current_cell_ix = None
-        if len(self.tstep_buffer) == self.num_cells:
+        if np.all([len(self.tstep_buffer[ix]) == self.num_int_steps for ix in range(
+                self.num_cells)]):
             self.__save_tstep()
 
     def __save_tstep(self):
         if not self.finished:
             validate_buffer(self.num_cells, self.tstep_buffer, "TSTEP_BUFFER")
             self.main_buffer["tsteps"].append(copy.deepcopy(self.tstep_buffer))
-            self.tstep_buffer = dict([(ix, list()) for ix in range(self.num_cells)])
+            self.tstep_buffer = [list() for _ in range(self.num_cells)]
             if len(self.main_buffer["tsteps"]) == self.num_tsteps:
                 with open(self.write_file_path, "wb") as f:
                     f.write(orjson.dumps(self.main_buffer))

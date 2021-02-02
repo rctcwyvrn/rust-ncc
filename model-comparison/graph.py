@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 import copy
 import py_model.hardio as hio
 
-NUM_TSTEPS = 18
+NUM_TSTEPS = 1800
 NUM_CELLS = 2
 COA = 24
 CIL = 60
 NUM_INT_STEPS = 10
 
-py_out = get_py_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
-rust_out = get_rust_dat(NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+py_out = read_save_file("py", NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
+rust_out = read_save_file("rust", NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
 
 check_header_equality(py_out, rust_out)
 
@@ -26,8 +26,8 @@ py_dat = py_out["tsteps"]
 rust_dat = rust_out["tsteps"]
 
 
-py_data_dict_per_cell = gen_data_dict_per_cell(py_dat)
-rust_data_dict_per_cell = gen_data_dict_per_cell(rust_dat)
+py_data_dict_per_cell = gen_data_dict_per_cell(py_out)
+rust_data_dict_per_cell = gen_data_dict_per_cell(rust_out)
 
 
 def calc_extras(data_dict):
@@ -111,8 +111,8 @@ def group_labels():
     return group_to_label, label_to_group
 
 
-def calculate_data_group_min_maxes(group_to_label, dict_rust_dat_per_cell,
-                                   dict_py_dat_per_cell, max_int_step,
+def calculate_data_group_min_maxes(group_to_label, rust_data_dict_per_cell,
+                                   py_data_dict_per_cell, max_int_step,
                                    focus_cell):
     global NUM_CELLS
     group_min_maxes = []
@@ -121,22 +121,22 @@ def calculate_data_group_min_maxes(group_to_label, dict_rust_dat_per_cell,
         for label in label_group:
             for cell_ix in range(NUM_CELLS):
                 if cell_ix == focus_cell or focus_cell == "all":
-                    dat = np.append(dat, dict_rust_dat_per_cell[cell_ix][
+                    dat = np.append(dat, rust_data_dict_per_cell[cell_ix][
                                              label][
                                          :max_int_step])
-                    dat = np.append(dat, dict_py_dat_per_cell[cell_ix][label][
+                    dat = np.append(dat, py_data_dict_per_cell[cell_ix][label][
                                          :max_int_step])
         group_min_maxes.append((np.min(dat), np.max(dat)))
     return group_min_maxes
 
 
-def calculate_label_min_maxes(dict_rust_dat_per_cell, dict_py_dat_per_cell,
+def calculate_label_min_maxes(rust_data_dict_per_cell, py_data_dict_per_cell,
                               max_int_step, focus_cell):
     global ALL_LABELS
     group_to_label, label_to_group = group_labels()
     group_min_maxes = \
-        calculate_data_group_min_maxes(group_to_label, dict_rust_dat_per_cell,
-                                       dict_py_dat_per_cell, max_int_step,
+        calculate_data_group_min_maxes(group_to_label, rust_data_dict_per_cell,
+                                       py_data_dict_per_cell, max_int_step,
                                        focus_cell)
     label_min_maxes = []
     for group_ix in label_to_group:
@@ -153,6 +153,8 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
     global ALL_LABEL_MAXES
     global CELL_PLOT_IX
     global NUM_CELLS
+    global rust_data_dict_per_cell
+    global py_data_dict_per_cell
     ax.cla()
 
     VERTEX_PLOT_IX = (VERTEX_PLOT_IX + delta_vx) % len(VERTEX_PLOT_TYPE)
@@ -166,8 +168,8 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
     cell = CELL_PLOT_TYPE[CELL_PLOT_IX]
 
     if abs(delta_mp) > 0 or abs(delta_cx) > 0:
-        ALL_LABEL_MAXES = calculate_label_min_maxes(dict_rust_dat_per_cell,
-                                                    dict_py_dat_per_cell,
+        ALL_LABEL_MAXES = calculate_label_min_maxes(rust_data_dict_per_cell,
+                                                    py_data_dict_per_cell,
                                                     MAX_PLOT_TSTEP,
                                                     cell)
 
@@ -242,14 +244,14 @@ group_to_label, label_to_group = group_labels()
 ALL_LABEL_MAXES = calculate_label_min_maxes(py_data_dict_per_cell,
                                             rust_data_dict_per_cell,
                                             MAX_PLOT_TSTEP, "all")
-# VERTEX_PLOT_IX = 16  # set initially to plot all
-# CELL_PLOT_IX = NUM_CELLS  # set initially to plot all
-# DATA_TYPE_IX = 0
-# fig, ax = plt.subplots()
-# paint(0, 0, 0, 0)
-# fig.canvas.mpl_connect('key_press_event', on_press)
+VERTEX_PLOT_IX = 16  # set initially to plot all
+CELL_PLOT_IX = NUM_CELLS  # set initially to plot all
+DATA_TYPE_IX = 0
+fig, ax = plt.subplots()
+paint(0, 0, 0, 0)
+fig.canvas.mpl_connect('key_press_event', on_press)
 
-poly_per_tstep = py_data_dict_per_cell[0]["poly"]
-print(poly_per_tstep.shape)
-plt.plot(py_data_dict_per_cell[0]["poly"][:, 1])
-print(py_data_dict_per_cell[0]["poly"][:, 0])
+# poly_per_tstep = py_data_dict_per_cell[0]["poly"]
+# print(poly_per_tstep.shape)
+# plt.plot(py_data_dict_per_cell[0]["poly"][:, 1])
+# print(py_data_dict_per_cell[0]["poly"][:, 0])

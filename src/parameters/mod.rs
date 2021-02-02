@@ -20,9 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
 /// Characteristic quantities used for normalization.
-#[derive(
-    Clone, Copy, Deserialize, Serialize, Default, Debug, PartialEq,
-)]
+#[derive(Clone, Copy, Deserialize, Serialize, Default, Debug, PartialEq)]
 pub struct CharQuantities {
     pub eta: Viscosity,
     pub f: Force,
@@ -73,18 +71,13 @@ pub struct RawPhysicalContactParams {
 }
 
 impl RawPhysicalContactParams {
-    pub fn refine(
-        &self,
-        cq: &CharQuantities,
-    ) -> PhysicalContactParams {
+    pub fn refine(&self, cq: &CharQuantities) -> PhysicalContactParams {
         PhysicalContactParams {
             range: CloseBounds::new(
                 cq.normalize(&self.range.zero_at),
                 cq.normalize(&self.range.one_at),
             ),
-            adh_mag: self
-                .adh_mag
-                .map(|adh_mag| cq.normalize(&adh_mag)),
+            adh_mag: self.adh_mag.map(|adh_mag| cq.normalize(&adh_mag)),
             cal_mag: self.cal_mag,
             cil_mag: self.cil_mag,
         }
@@ -189,9 +182,7 @@ pub struct RawWorldParameters {
     pub interactions: RawInteractionParams,
 }
 
-#[derive(
-    Clone, Copy, Deserialize, Serialize, PartialEq, Default, Debug,
-)]
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct CloseBounds {
     pub zero_at: f32,
     pub one_at: f32,
@@ -206,9 +197,7 @@ impl CloseBounds {
     }
 }
 
-#[derive(
-    Clone, Copy, Deserialize, Serialize, PartialEq, Default, Debug,
-)]
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct PhysicalContactParams {
     /// Maximum distance between two points, for them to be considered
     /// in contact. This is usually set to 0.5 micrometers.
@@ -290,6 +279,7 @@ pub struct WorldParameters {
 
 impl RawWorldParameters {
     pub fn refine(&self, bq: &CharQuantities) -> WorldParameters {
+        let vertex_eta = bq.normalize(&self.vertex_eta);
         WorldParameters {
             vertex_eta: bq.normalize(&self.vertex_eta),
             interactions: self.interactions.refine(bq),
@@ -443,18 +433,14 @@ pub struct Parameters {
 impl RawParameters {
     pub fn gen_parameters(&self, bq: &CharQuantities) -> Parameters {
         let cell_r = self.cell_diam.mul_number(0.5);
-        let rel =
-            self.cell_diam.mul_number((PI / (NVERTS as f32)).sin());
+        let rel = self.cell_diam.mul_number((PI / (NVERTS as f32)).sin());
         let ra = Length(1.0)
             .pow(2.0)
             .mul_number(calc_init_cell_area(cell_r.number()));
-        let const_protrusive =
-            (self.lm_h.g() * self.lm_ss.g() * rel.g())
-                .mul_number(self.halfmax_rgtp_max_f_frac);
-        let const_retractive =
-            const_protrusive.mul_number(self.rho_friction);
-        let halfmax_vertex_rgtp_act =
-            (self.halfmax_rgtp_frac) / NVERTS as f32;
+        let const_protrusive = (self.lm_h.g() * self.lm_ss.g() * rel.g())
+            .mul_number(self.halfmax_rgtp_max_f_frac);
+        let const_retractive = const_protrusive.mul_number(self.rho_friction);
+        let halfmax_vertex_rgtp_act = (self.halfmax_rgtp_frac) / NVERTS as f32;
         let halfmax_vertex_rgtp_conc =
             rel.pow(-1.0).mul_number(halfmax_vertex_rgtp_act);
         let stiffness_edge = self.stiffness_cortex.g() * bq.l3d.g();
@@ -469,37 +455,29 @@ impl RawParameters {
             const_protrusive: bq.normalize(&const_protrusive),
             const_retractive: bq.normalize(&const_retractive),
             stiffness_cyto: bq.normalize(&stiffness_cyto),
-            k_mem_on_vertex: bq.normalize(&bq.k_mem_on)
-                / NVERTS as f32,
+            k_mem_on_vertex: bq.normalize(&bq.k_mem_on) / NVERTS as f32,
             k_mem_off: bq.normalize(&bq.k_mem_off),
             diffusion_rgtp: bq.normalize(&self.diffusion_rgtp),
             init_rac: self.init_rac,
             init_rho: self.init_rho,
             halfmax_vertex_rgtp_act,
-            halfmax_vertex_rgtp_conc: bq
-                .normalize(&halfmax_vertex_rgtp_conc),
+            halfmax_vertex_rgtp_conc: bq.normalize(&halfmax_vertex_rgtp_conc),
             tot_rac: self.tot_rac,
             tot_rho: self.tot_rho,
-            kgtp_rac: bq
-                .normalize(&bq.kgtp.mul_number(self.kgtp_rac)),
+            kgtp_rac: bq.normalize(&bq.kgtp.mul_number(self.kgtp_rac)),
             kgtp_rac_auto: bq
                 .normalize(&bq.kgtp.mul_number(self.kgtp_rac_auto)),
-            kdgtp_rac: bq
-                .normalize(&bq.kdgtp.mul_number(self.kdgtp_rac)),
-            kdgtp_rho_on_rac: bq.normalize(
-                &bq.kdgtp.mul_number(self.kdgtp_rho_on_rac),
-            ),
+            kdgtp_rac: bq.normalize(&bq.kdgtp.mul_number(self.kdgtp_rac)),
+            kdgtp_rho_on_rac: bq
+                .normalize(&bq.kdgtp.mul_number(self.kdgtp_rho_on_rac)),
             halfmax_tension_inhib: self.halfmax_tension_inhib,
             tension_inhib: self.tension_inhib,
-            kgtp_rho: bq
-                .normalize(&bq.kgtp.mul_number(self.kgtp_rho)),
+            kgtp_rho: bq.normalize(&bq.kgtp.mul_number(self.kgtp_rho)),
             kgtp_rho_auto: bq
                 .normalize(&bq.kgtp.mul_number(self.kgtp_auto_rho)),
-            kdgtp_rho: bq
-                .normalize(&bq.kdgtp.mul_number(self.kdgtp_rho)),
-            kdgtp_rac_on_rho: bq.normalize(
-                &bq.kdgtp.mul_number(self.kdgtp_rac_on_rho),
-            ),
+            kdgtp_rho: bq.normalize(&bq.kdgtp.mul_number(self.kdgtp_rho)),
+            kdgtp_rac_on_rho: bq
+                .normalize(&bq.kdgtp.mul_number(self.kdgtp_rac_on_rho)),
             randomization: self.randomization,
             rand_avg_t: bq.normalize(&self.rand_avg_t).ceil(),
             rand_std_t: bq.normalize(&self.rand_std_t).ceil(),
