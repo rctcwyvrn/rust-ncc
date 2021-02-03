@@ -89,6 +89,12 @@ pub fn close_to_zero(x: f32) -> bool {
     x.abs() < 1e-4
 }
 
+/// Round to `n` digits.
+pub fn round(x: f32, n: u32) -> f32 {
+    let scale = 10_u32.pow(n) as f32;
+    (x * scale).round() / scale
+}
+
 #[derive(Clone, Copy)]
 pub enum InUnitInterval {
     In,

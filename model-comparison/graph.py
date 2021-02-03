@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import copy
 import py_model.hardio as hio
 
-NUM_TSTEPS = 1800
+NUM_TSTEPS = 18
 NUM_CELLS = 2
 COA = 24
 CIL = 60
@@ -70,7 +70,8 @@ DATA_GROUPS = [["poly", "centroid"], ["kgtps_rac", "kdgtps_rac",
                 "cyto_forces"],
                ["rac_acts", "rac_inacts", "rho_acts", "rho_inacts"],
                ["rac_act_net_fluxes"], ["conc_rac_acts"], ["x_cils"],
-               ["x_coas"], ["edge_strains"], ["poly_area"]]
+               ["x_coas"], ["edge_strains"], ["poly_area"], ["coa_update",
+                                                             "cil_update"]]
 
 unmatched_labels = []
 for label in hio.DATA_LABELS + EXTRA_LABELS:
@@ -126,7 +127,7 @@ def calculate_data_group_min_maxes(group_to_label, rust_data_dict_per_cell,
                                          :max_int_step])
                     dat = np.append(dat, py_data_dict_per_cell[cell_ix][label][
                                          :max_int_step])
-        group_min_maxes.append((np.min(dat), np.max(dat)))
+        group_min_maxes.append((0.0, np.max(dat)))
     return group_min_maxes
 
 
@@ -144,7 +145,7 @@ def calculate_label_min_maxes(rust_data_dict_per_cell, py_data_dict_per_cell,
     return dict(zip(ALL_LABELS, label_min_maxes))
 
 
-def paint(delta_vx, delta_dt, delta_mp, delta_cx):
+def paint(delta_vertex_plot, delta_data_plot, delta_max_plot, delta_cell_plot):
     global fig
     global ax
     global VERTEX_PLOT_IX
@@ -153,25 +154,27 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
     global ALL_LABEL_MAXES
     global CELL_PLOT_IX
     global NUM_CELLS
+    global BEGIN
     global rust_data_dict_per_cell
     global py_data_dict_per_cell
     ax.cla()
 
-    VERTEX_PLOT_IX = (VERTEX_PLOT_IX + delta_vx) % len(VERTEX_PLOT_TYPE)
-    DATA_TYPE_IX = (DATA_TYPE_IX + delta_dt) % len(hio.DATA_LABELS)
-    CELL_PLOT_IX = (CELL_PLOT_IX + delta_cx) % len(CELL_PLOT_TYPE)
-    MAX_PLOT_TSTEP += delta_mp
+    VERTEX_PLOT_IX = (VERTEX_PLOT_IX + delta_vertex_plot) % len(VERTEX_PLOT_TYPE)
+    DATA_TYPE_IX = (DATA_TYPE_IX + delta_data_plot) % len(hio.DATA_LABELS)
+    CELL_PLOT_IX = (CELL_PLOT_IX + delta_cell_plot) % len(CELL_PLOT_TYPE)
+    MAX_PLOT_TSTEP += delta_max_plot
 
     label = ALL_LABELS[DATA_TYPE_IX]
     color = ALL_COLORS[DATA_TYPE_IX]
     vert = VERTEX_PLOT_TYPE[VERTEX_PLOT_IX]
     cell = CELL_PLOT_TYPE[CELL_PLOT_IX]
 
-    if abs(delta_mp) > 0 or abs(delta_cx) > 0:
+    if abs(delta_max_plot) > 0 or abs(delta_cell_plot) > 0 or BEGIN == True:
         ALL_LABEL_MAXES = calculate_label_min_maxes(rust_data_dict_per_cell,
                                                     py_data_dict_per_cell,
                                                     MAX_PLOT_TSTEP,
                                                     cell)
+        BEGIN = False
 
     for m in range(NUM_CELLS):
         if m == cell or cell == "all":
@@ -185,7 +188,7 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
                     dict_py_dat[label][:MAX_PLOT_TSTEP],
                     color=color,
                     linestyle="dashed")
-                # ax.set_ylim(ALL_LABEL_MAXES[label])
+                ax.set_ylim((0.0, 1.2 * ALL_LABEL_MAXES[label][1]))
             else:
                 for n in range(16):
                     if n == vert or vert == "all":
@@ -195,8 +198,10 @@ def paint(delta_vx, delta_dt, delta_mp, delta_cx):
                         ax.plot(dict_py_dat[label][
                                 :MAX_PLOT_TSTEP, n], color=color,
                                 linestyle="dashed")
-                        # ax.set_ylim(ALL_LABEL_MAXES[label])
+                        ax.set_ylim((0.0, 1.2 * ALL_LABEL_MAXES[label][1]))
 
+    ax.set_xticks(np.arange(MAX_PLOT_TSTEP))
+    ax.grid(which="major", axis="x")
     ax.set_title("{}, vert: {}, cell: {}".format(label, vert, cell))
 
 
@@ -247,6 +252,7 @@ ALL_LABEL_MAXES = calculate_label_min_maxes(py_data_dict_per_cell,
 VERTEX_PLOT_IX = 16  # set initially to plot all
 CELL_PLOT_IX = NUM_CELLS  # set initially to plot all
 DATA_TYPE_IX = 0
+BEGIN = True
 fig, ax = plt.subplots()
 paint(0, 0, 0, 0)
 fig.canvas.mpl_connect('key_press_event', on_press)

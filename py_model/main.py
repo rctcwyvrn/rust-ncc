@@ -2,7 +2,7 @@ import experiment_templates as ets
 import hardio as fw
 import numpy as np
 
-TIME_IN_HOURS = 1.0
+TIME_IN_HOURS = 0.01
 T = 2.0
 L = 1e-6
 F = 1e-9

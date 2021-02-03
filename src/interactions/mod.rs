@@ -82,7 +82,7 @@ pub struct Interactions {
 pub struct InteractionGenerator {
     /// Vertex coordinates, per cell, for all cells in the simulation.
     cell_polys: Vec<Poly>,
-    all_rgtps: Vec<[RelativeRgtpActivity; NVERTS]>,
+    cell_relative_rgtp_acts: Vec<[RelativeRgtpActivity; NVERTS]>,
     /// Generates CIL/CAL related interaction information. In other
     /// words, interactions that require cells to engage in physical
     /// contact.
@@ -100,7 +100,7 @@ pub struct ContactData {
 impl InteractionGenerator {
     pub fn new(
         cell_verts: &[[V2D; NVERTS]],
-        cell_rgtps: &[[RelativeRgtpActivity; NVERTS]],
+        cell_relative_rgtp_acts: &[[RelativeRgtpActivity; NVERTS]],
         params: InteractionParams,
     ) -> InteractionGenerator {
         let cell_polys = cell_verts
@@ -116,7 +116,7 @@ impl InteractionGenerator {
         let bdry_generator = params.bdry.map(BdryEffectGenerator::new);
         InteractionGenerator {
             cell_polys: cell_polys.iter().copied().collect(),
-            all_rgtps: cell_rgtps.iter().copied().collect(),
+            cell_relative_rgtp_acts: cell_rgtps.iter().copied().collect(),
             phys_contact_generator,
             coa_generator,
             chem_attr_generator,
@@ -124,8 +124,14 @@ impl InteractionGenerator {
         }
     }
 
-    pub fn update(&mut self, cell_ix: usize, vs: &[V2D; NVERTS]) {
+    pub fn update(
+        &mut self,
+        cell_ix: usize,
+        vs: &[V2D; NVERTS],
+        relative_rgtp_act: &[RelativeRgtpActivity; NVERTS],
+    ) {
         self.cell_polys[cell_ix] = Poly::from_points(vs);
+        self.cell_relative_rgtp_acts[cell_ix] = relative_rgtp_act.clone();
         if let Some(coa_gen) = self.coa_generator.as_mut() {
             coa_gen.update(cell_ix, &self.cell_polys)
         }
@@ -141,6 +147,7 @@ impl InteractionGenerator {
 
     pub fn generate(
         &self,
+        cell_ix: usize,
         rel_rgtps: &[[RelativeRgtpActivity; NVERTS]],
     ) -> Vec<Interactions> {
         let num_cells = self.cell_polys.len();

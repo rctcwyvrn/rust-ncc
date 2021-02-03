@@ -7,7 +7,7 @@ fn main() {
     let mut w = world::World::new(exp);
 
     let now = Instant::now();
-    w.simulate(1.0 * 3600.0);
+    w.simulate(0.01 * 3600.0);
 
     println!("Simulation complete. {} s.", now.elapsed().as_secs());
 }

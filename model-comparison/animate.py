@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # ===========================================================================
 
-NUM_TSTEPS = 1800
+NUM_TSTEPS = 18
 NUM_CELLS = 2
 COA = 24
 CIL = 60

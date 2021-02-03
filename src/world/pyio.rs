@@ -89,6 +89,8 @@ pub struct IntStepData {
     pub rac_act_net_fluxes: [f32; NVERTS],
     pub edge_strains: [f32; NVERTS],
     pub poly_area: f32,
+    pub coa_update: [bool; NVERTS],
+    pub cil_update: [bool; NVERTS],
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug, PartialEq)]

@@ -453,7 +453,7 @@ impl CoaGenerator {
                             *x_coa += additional_signal;
 
                             // println!("coa_signal: {}", coa_signal);
-                            // println!("signal_strength: {}", mag);
+                            // println!("coa_mag: {}", mag);
                             //
                             // println!(
                             //     "new = {} + {}",

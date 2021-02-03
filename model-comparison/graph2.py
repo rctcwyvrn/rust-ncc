@@ -135,13 +135,13 @@ def paint(delta_vx, delta_dt, delta_mp):
     if len(dict_rust_dat[label].shape) == 1:
         ax.plot(dict_rust_dat[label][:MAX_PLOT_INT_STEP], color=color)
         ax.plot(dict_py_dat[label][:MAX_PLOT_INT_STEP], color=color, linestyle="dashed")
-        ax.set_ylim(ALL_LABEL_MAXES[label])
+        ax.set_ylim((0.0, ALL_LABEL_MAXES[label][1]))
     else:
         for n in range(16):
             if n == vert or vert == "all":
                 ax.plot(dict_rust_dat[label][:MAX_PLOT_INT_STEP, n], color=color)
                 ax.plot(dict_py_dat[label][:MAX_PLOT_INT_STEP, n], color=color, linestyle="dashed")
-                ax.set_ylim(ALL_LABEL_MAXES[label])
+                ax.set_ylim((0.0, ALL_LABEL_MAXES[label][1]))
 
     ax.set_title("{}, vert: {}".format(label, vert))
 

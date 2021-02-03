@@ -17,6 +17,7 @@ use crate::cell::states::{ChemState, CoreState, GeomState, MechState};
 use crate::interactions::{ContactData, Interactions};
 use crate::math::geometry::{calc_poly_area, check_strong_intersection};
 use crate::math::v2d::V2D;
+use crate::math::{close_to_zero, round};
 use crate::parameters::{Parameters, WorldParameters};
 use crate::utils::pcg32::Pcg32;
 use crate::utils::{circ_ix_minus, circ_ix_plus};
@@ -42,6 +43,8 @@ pub struct Cell {
     pub geom: GeomState,
     /// Chemical state (various reaction rates).
     pub chem: ChemState,
+    pub old_x_coas: [f32; NVERTS],
+    pub old_x_cils: [f32; NVERTS],
 }
 
 pub fn violates_volume_exclusion(
@@ -165,6 +168,8 @@ impl Cell {
             geom,
             chem,
             mech,
+            old_x_coas: interactions.x_coas,
+            old_x_cils: interactions.x_cils,
         }
     }
 
@@ -188,6 +193,63 @@ impl Cell {
         // Therefore, we can take the time period to integrate over
         // as 1.0.
         let dt = 1.0 / (num_int_steps as f32);
+        println!("-----------------------------------");
+        println!("tstep: {}, cell: {}", tstep, self.ix);
+        let mut coa_update = [false; NVERTS];
+        for i in 0..NVERTS {
+            coa_update[i] =
+                close_to_zero(self.old_x_coas[i] - interactions.x_coas[i]);
+        }
+        if coa_update.iter().any(|&x| x) {
+            println!(
+                "old_coa = [{}]",
+                self.old_x_coas
+                    .iter()
+                    .map(|&x| round(x, 4).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+            println!(
+                "new_coa = [{}]",
+                interactions
+                    .x_coas
+                    .iter()
+                    .map(|&x| round(x, 4).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        } else {
+            println!("old_coa = no change");
+            println!("new_coa = no change");
+        }
+        let mut cil_update = [false; NVERTS];
+        for i in 0..NVERTS {
+            cil_update[i] =
+                close_to_zero(self.old_x_cils[i] - interactions.x_cils[i]);
+        }
+        if cil_update.iter().any(|&x| x) {
+            println!(
+                "old_cil = [{}]",
+                self.old_x_cils
+                    .iter()
+                    .map(|&x| round(x, 4).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+            println!(
+                "new_cil = [{}]",
+                interactions
+                    .x_cils
+                    .iter()
+                    .map(|&x| round(x, 4).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        } else {
+            println!("old_cil = no change");
+            println!("new_cil = no change");
+        }
+        println!("-----------------------------------");
         for _ in 0..num_int_steps {
             let geom_state = state.calc_geom_state();
             let mech_state = state.calc_mech_state(&geom_state, parameters);
@@ -243,6 +305,8 @@ impl Cell {
                 rac_act_net_fluxes: chem_state.rac_act_net_fluxes,
                 edge_strains: mech_state.edge_strains,
                 poly_area: calc_poly_area(&state.poly),
+                coa_update,
+                cil_update,
             };
             writer.save_int_step(save_data);
             // d(state)/dt = dynamics_f(state) <- calculate RHS of ODE
@@ -283,6 +347,8 @@ impl Cell {
             geom: geom_state,
             chem: chem_state,
             mech: mech_state,
+            old_x_coas: interactions.x_coas,
+            old_x_cils: interactions.x_cils,
         })
     }
 
@@ -339,6 +405,8 @@ impl Cell {
             geom: geom_state,
             chem: chem_state,
             mech: mech_state,
+            old_x_coas: interactions.x_coas,
+            old_x_cils: interactions.x_cils,
         })
     }
 }

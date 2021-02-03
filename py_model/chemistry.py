@@ -79,9 +79,10 @@ def calculate_kgtp_rho(
 ):
     result = np.empty(16)
     for i in range(16):
-        kgtp_rho_autoact = kgtp_rho_auto * hill_function3(halfmax_vertex_rgtp_conc,
-                                                          conc_rho_act[i]
-                                                          )
+        kgtp_rho_autoact = kgtp_rho_auto * hill_function3(
+            halfmax_vertex_rgtp_conc,
+            conc_rho_act[i]
+            )
 
         i_plus1 = (i + 1) % 16
         i_minus1 = (i - 1) % 16
@@ -241,8 +242,8 @@ def calc_x_cils(
 # -----------------------------------------------------------------
 # @nb.jit(nopython=True)
 def calculate_x_coas(
+        num_cells,
         this_cell_ix,
-        random_order_cell_indices,
         coa_distrib_exp,
         coa_mag,
         intercellular_dist_squared_matrix,
@@ -261,7 +262,7 @@ def calculate_x_coas(
         this_node_relevant_dist_squared_slice = \
             intercellular_dist_squared_matrix[ni]
 
-        for other_ci in random_order_cell_indices:
+        for other_ci in range(num_cells):
             if other_ci != this_cell_ix:
                 this_node_other_cell_relevant_line_seg_intersection_slice = \
                     this_node_relevant_line_seg_intersection_slice[
@@ -287,28 +288,28 @@ def calculate_x_coas(
                     # print("(ci: {}, vi: {}, ovi: {}, oci: {}):".format(
                     #     this_cell_ix, ni, other_ci, other_ni))
                     # print("dist: {}".format(np.sqrt(
-                    # dist_squared_between_nodes)))
+                    #     dist_squared_between_nodes)))
                     # print("num_intersects: {}".format(
                     #     line_segment_between_node_intersects_polygon))
                     # print("coa_los_penalty: {}".format(
                     #     intersection_factor))
 
-                    x_coa = 0.0
+                    coa_signal = 0.0
                     if dist_squared_between_nodes > too_close_dist_squared:
-                        x_coa = (
+                        coa_signal = (
                                 np.exp(
                                     coa_distrib_exp
                                     * np.sqrt(dist_squared_between_nodes)
                                 )
                                 * intersection_factor
                         )
-                    # old_x_coa = this_node_x_coa
-                    this_node_x_coa += x_coa * coa_mag
-                    # print("x_coa: {}".format(x_coa))
-                    # print("signal_strength: {}".format(signal_strength))
+                    old_x_coa = this_node_x_coa
+                    this_node_x_coa += coa_mag * coa_signal
+                    # print("coa_signal: {}".format(coa_signal))
+                    # print("coa_mag: {}".format(coa_mag))
                     # print(
                     #     "new = {} + {}".format(old_x_coa,
-                    #                            x_coa * signal_strength))
+                    #                            coa_mag * coa_signal))
 
         x_coas[ni] = this_node_x_coa
 

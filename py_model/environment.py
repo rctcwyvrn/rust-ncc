@@ -109,23 +109,6 @@ class Environment:
         self.mode = MODE_EXECUTE
         self.animation_settings = None
 
-    def extend_simulation_runtime(self, new_num_tsteps):
-        self.num_tsteps = new_num_tsteps
-        self.num_tpoints = self.num_tsteps + 1
-        self.timepoints = np.arange(0, self.num_tpoints)
-
-        for a_cell in self.env_cells:
-            a_cell.num_tpoints = self.num_tpoints
-
-        old_exec_orders = np.copy(self.exec_orders)
-        self.exec_orders = np.zeros(
-            (self.num_tpoints, self.num_cells), dtype=np.int64
-        )
-        self.exec_orders[: old_exec_orders.shape[0]] = old_exec_orders
-
-    def simulation_complete(self):
-        return self.num_tsteps == self.curr_tpoint
-
     # -----------------------------------------------------------------
 
     def make_cells(self):

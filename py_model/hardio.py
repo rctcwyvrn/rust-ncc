@@ -32,8 +32,8 @@ CALC_KGTPS_RAC = ["conc_rac_acts", "x_cils", "x_coas"]
 CALC_KGTPS_RAC_COLORS = ["blueviolet", "gold", "lightseagreen"]
 DIFFUSION = ["rac_act_net_fluxes"]
 DIFFUSION_COLORS = ["teal"]
-OTHERS = ["edge_strains", "poly_area"]
-OTHERS_COLORS = ["tab:orange", "green"]
+OTHERS = ["edge_strains", "poly_area", "coa_update", "cil_update"]
+OTHERS_COLORS = ["tab:orange", "green", "cadetblue", "darkgoldenrod"]
 
 DATA_LABELS = BASICS + GEOMETRY + RAC_RATES + RHO_RATES + FORCES + \
               CALC_KGTPS_RAC + DIFFUSION + OTHERS

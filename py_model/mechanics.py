@@ -50,7 +50,7 @@ def calculate_cytoplasmic_force(
     current_area = abs(geometry.calculate_polygon_area(this_cell_coords))
 
     area_strain = (current_area - rest_area) / rest_area
-    force_mag = area_strain * stiffness_cyto / 16
+    force_mag = area_strain * stiffness_cyto
 
     return geometry.multiply_vectors_by_scalar(
         uivs, force_mag

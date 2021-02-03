@@ -103,11 +103,11 @@ def cell_dynamics(
         cell_ix,
         state_array,
         num_phase_vars,
-        rac_acts_ix,
+        rac_act_ix,
         rest_edge_len,
-        rac_inacts_ix,
+        rac_inact_ix,
         rho_act_ix,
-        rho_inacts_ix,
+        rho_inact_ix,
         x_ix,
         y_ix,
         kgtp_rac,
@@ -122,7 +122,7 @@ def cell_dynamics(
         k_mem_off,
         halfmax_vertex_rgtp_conc,
         diffusion_rgtp,
-        eta,
+        vertex_eta,
         stiffness_edge,
         halfmax_vertex_rgtp_act,
         const_protrusive,
@@ -131,21 +131,23 @@ def cell_dynamics(
         stiffness_cyto,
         x_coas,
         close_point_smoothness_factors,
-        intercellular_contact_factors,
+        x_cils,
         halfmax_tension_inhib,
         tension_inhib,
         rac_rands,
+        coa_update,
+        cil_update
 ):
     phase_vars = state_array
 
-    rac_mem_active_start_ix = rac_acts_ix * 16
+    rac_mem_active_start_ix = rac_act_ix * 16
     rac_mem_active_end_ix = rac_mem_active_start_ix + 16
 
     rac_acts = phase_vars[
                rac_mem_active_start_ix:rac_mem_active_end_ix
                ]
 
-    rac_mem_inactive_start_ix = rac_inacts_ix * 16
+    rac_mem_inactive_start_ix = rac_inact_ix * 16
     rac_mem_inactive_end_ix = rac_mem_inactive_start_ix + 16
 
     rac_inacts = phase_vars[
@@ -159,7 +161,7 @@ def cell_dynamics(
                rho_mem_active_start_ix:rho_mem_active_end_ix
                ]
 
-    rho_mem_inactive_start_ix = rho_inacts_ix * 16
+    rho_mem_inactive_start_ix = rho_inact_ix * 16
     rho_mem_inactive_end_ix = rho_mem_inactive_start_ix + 16
 
     rho_inact = phase_vars[
@@ -228,7 +230,7 @@ def cell_dynamics(
         kgtp_rac_auto,
         x_coas,
         rac_rands,
-        intercellular_contact_factors,
+        x_cils,
         close_point_smoothness_factors,
     )
 
@@ -240,7 +242,7 @@ def cell_dynamics(
         halfmax_vertex_rgtp_conc,
         kdgtp_rac,
         kdgtp_rho_on_rac,
-        intercellular_contact_factors,
+        x_cils,
         halfmax_tension_inhib,
         tension_inhib,
         only_tensile_local_strains,
@@ -248,7 +250,7 @@ def cell_dynamics(
 
     kgtps_rho = chemistry.calculate_kgtp_rho(
         conc_rho_acts,
-        intercellular_contact_factors,
+        x_cils,
         halfmax_vertex_rgtp_conc,
         kgtp_rho,
         kgtp_rho_auto,
@@ -304,8 +306,8 @@ def cell_dynamics(
     for ni in range(16):
         old_coord = verts[ni]
 
-        new_verts[ni][0] = old_coord[0] + sum_forces_x[ni] / eta
-        new_verts[ni][1] = old_coord[1] + sum_forces_y[ni] / eta
+        new_verts[ni][0] = old_coord[0] + sum_forces_x[ni] / vertex_eta
+        new_verts[ni][1] = old_coord[1] + sum_forces_y[ni] / vertex_eta
 
     # # calculate volume exclusion effects
     # num_bisection_iterations = 2
@@ -354,6 +356,7 @@ def cell_dynamics(
     #                 max_movement_mag,
     #                 success_condition_stay_in,
     #             )
+
     poly_area = geometry.calculate_polygon_area(verts)
     data = [("poly", [[float(v) for v in x] for x in verts]),
             ("rac_acts", [float(v) for v in rac_acts]),
@@ -370,11 +373,13 @@ def cell_dynamics(
             ("kgtps_rho", [float(v) for v in kgtps_rho]),
             ("kdgtps_rho", [float(v) for v in kdgtps_rho]),
             ("conc_rac_acts", [float(v) for v in conc_rac_acts]),
-            ("x_cils", [float(v) for v in intercellular_contact_factors]),
+            ("x_cils", [float(v) for v in x_cils]),
             ("x_coas", [float(v) for v in x_coas]),
             ("rac_act_net_fluxes", [float(v) for v in diffusion_rac_acts]),
             ("edge_strains", [float(v) for v in edge_strains]),
-            ("poly_area", poly_area)]
+            ("poly_area", poly_area), ("coa_update",
+                                       [bool(v) for v in coa_update]),
+            ("cil_update", [bool(v) for v in cil_update])]
     # for d in data:
     #     print("{}: {}".format(d[0], d[1]))
     writer.save_int_step(cell_ix, data)

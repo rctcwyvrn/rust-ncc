@@ -62,7 +62,6 @@ impl Cells {
                 rng,
                 writer,
             )?;
-
             interaction_generator.update(ci, &new_cell_state.core.poly);
 
             #[cfg(feature = "validate")]
