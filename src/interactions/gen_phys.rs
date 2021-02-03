@@ -234,32 +234,6 @@ impl PhysicalContactGenerator {
         r
     }
 
-    // /// Get vertices on cell `oci` that are close to cell `ci`.
-    // pub fn get_close_verts(
-    //     &self,
-    //     aci: u32,
-    //     bci: u32,
-    // ) -> Vec<u32> {
-    //     let mut r = vec![];
-    //     for avi in 0..NVERTS {
-    //         for (bvi, close_point) in self
-    //             .dat
-    //             .get_per_other_vertex(aci, avi, bci)
-    //             .iter()
-    //             .enumerate()
-    //         {
-    //             match close_point {
-    //                 ClosePoint::Vertex(_)
-    //                 | ClosePoint::OnEdge(_, _) => r.push(bvi),
-    //                 ClosePoint::None => {}
-    //             }
-    //         }
-    //     }
-    //     r.sort_unstable();
-    //     r.dedup();
-    //     r
-    // }
-
     pub fn update(&mut self, ci: usize, cell_polys: &[Poly]) {
         let poly = cell_polys[ci];
         let bb = cell_polys[ci].bbox.expand_by(self.params.range.zero_at);
@@ -273,44 +247,6 @@ impl PhysicalContactGenerator {
             if ci != oci && self.contacts.get(ci, oci) {
                 for (pi, p) in poly.verts.iter().enumerate() {
                     for (ai, a) in other.verts.iter().enumerate() {
-                        // if ci == 0 && oci == 1 && pi == 3 && ai == 13
-                        // {
-                        //     println!(
-                        //         "c0_3, c1_13: {}",
-                        //         (p - a).mag()
-                        //     );
-                        // }
-                        // if ci == 0 && oci == 1 && pi == 5 && ai == 11
-                        // {
-                        //     println!(
-                        //         "c0_5, c1_11: {}",
-                        //         (p - a).mag()
-                        //     );
-                        // }
-                        // if ci == 0 && oci == 1 && pi == 4 && ai == 12
-                        // {
-                        //     println!(
-                        //         "c0_4, c1_12: {}",
-                        //         (p - a).mag()
-                        //     );
-                        // }
-                        // if ci == 1 && oci == 0 && pi == 12 && ai == 4
-                        // {
-                        //     println!(
-                        //         "c1_12, c0_4: {}",
-                        //         (p - a).mag()
-                        //     );
-                        // }
-                        // if ((ci == 0 && oci == 1 && pi == 4)
-                        //     || (ci == 1 && oci == 0 && pi == 12))
-                        //     && tstep > 2807
-                        // {
-                        //     // println!(
-                        //     //     "ci: {}, oci: {}, pi: {}, ai: {}",
-                        //     //     ci, oci, pi, ai
-                        //     // );
-                        // }
-
                         let bi = circ_ix_plus(ai, NVERTS);
                         let b = &other.verts[bi];
                         self.dat.set(

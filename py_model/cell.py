@@ -613,6 +613,7 @@ class Cell:
     # -----------------------------------------------------------------
     def pack_rhs_arguments(
             self,
+            all_cells_verts,
             close_point_smoothness_factors,
     ):
         x_coas = self.curr_state[:, parameters.x_coa_ix]
@@ -620,10 +621,9 @@ class Cell:
         print("-----------------------------------")
         np.set_printoptions(suppress=True)
         print("tstep: {}, cell: {}".format(self.curr_tstep, self.cell_ix))
-        if np.any(
-                np.abs(self.curr_state[:, parameters.x_coa_ix] -
-                       self.curr_state[:, parameters.old_x_coa_ix]) < 1e-4
-        ):
+        coa_update = np.abs(self.curr_state[:, parameters.x_coa_ix] -
+                            self.curr_state[:, parameters.old_x_coa_ix]) < 1e-4
+        if np.any(coa_update):
             print("old_coa = {}".format([float(x) if not x.is_integer() else
                                          int(x) for x in np.round(self.curr_state[:,
                                                                   parameters.x_coa_ix], 4)]))
@@ -640,10 +640,9 @@ class Cell:
         self.curr_state[:, parameters.old_x_cil_ix] = \
             self.curr_state[:, parameters.x_cil_ix]
         self.curr_state[:, parameters.x_cil_ix] = x_cils
-        if np.any(
-                np.abs(self.curr_state[:, parameters.old_x_cil_ix] -
-                       self.curr_state[:, parameters.x_cil_ix]) < 1e-4
-        ):
+        cil_update = np.abs(self.curr_state[:, parameters.old_x_cil_ix] -
+                            self.curr_state[:, parameters.x_cil_ix]) < 1e-4
+        if np.any(cil_update):
             print("old_cil = {}".format([float(x) if not x.is_integer() else
                                          int(x) for x in np.round(self.curr_state[:,
                                                                   parameters.old_x_cil_ix], 4)]))
@@ -656,6 +655,8 @@ class Cell:
         print("-----------------------------------")
 
         return (
+            self.num_cells,
+            all_cells_verts,
             self.num_phase_vars,
             self.rac_act_ix,
             self.rest_edge_len,
@@ -730,7 +731,8 @@ class Cell:
                 self.close_one_at,
                 all_cells_verts, are_nodes_inside_other_cells)
 
-        rhs_args = self.pack_rhs_arguments(close_point_smoothness_factors)
+        rhs_args = self.pack_rhs_arguments(all_cells_verts,
+                                           close_point_smoothness_factors)
 
         output_array = dynamics.eulerint(
             dynamics.cell_dynamics, state_array, np.array([0, 1]),

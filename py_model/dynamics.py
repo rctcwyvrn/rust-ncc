@@ -102,6 +102,8 @@ def cell_dynamics(
         writer,
         cell_ix,
         state_array,
+        num_cells,
+        all_cells_verts,
         num_phase_vars,
         rac_act_ix,
         rest_edge_len,
@@ -309,53 +311,30 @@ def cell_dynamics(
         new_verts[ni][0] = old_coord[0] + sum_forces_x[ni] / vertex_eta
         new_verts[ni][1] = old_coord[1] + sum_forces_y[ni] / vertex_eta
 
-    # # calculate volume exclusion effects
-    # num_bisection_iterations = 2
-    # max_movement_mag = const_protrusive / eta
-    # success_condition_stay_out = 0
-    # success_condition_stay_in = 1
-    #
-    # are_new_nodes_inside_other_cell = np.zeros(16, dtype=np.int64)
-    # for other_ci in range(num_cells):
-    #     if other_ci != this_cell_ix:
-    #         are_new_nodes_inside_other_cell =
-    #         geometry.are_points_inside_polygon(
-    #             new_verts, all_cells_verts[other_ci]
-    #         )
-    #
-    #         for ni in range(16):
-    #             if are_new_nodes_inside_other_cell[ni] !=
-    #             success_condition_stay_out:
-    #                 new_verts[ni] = determine_volume_exclusion_effects(
-    #                     verts[ni],
-    #                     new_verts[ni],
-    #                     uivs[ni],
-    #                     all_cells_verts[other_ci],
-    #                     num_bisection_iterations,
-    #                     max_movement_mag,
-    #                     success_condition_stay_out,
-    #                 )
-    #
-    # if exists_space_physical_bdry_polygon == 1:
-    #     are_new_nodes_inside_space_physical_bdry_polygon =
-    #     geometry.are_points_inside_polygon(
-    #         new_verts, space_physical_bdry_polygon
-    #     )
-    #
-    #     for ni in range(16):
-    #         if (
-    #             are_new_nodes_inside_space_physical_bdry_polygon[ni]
-    #             != success_condition_stay_in
-    #         ):
-    #             new_verts[ni] = determine_volume_exclusion_effects(
-    #                 verts[ni],
-    #                 new_verts[ni],
-    #                 uivs[ni],
-    #                 space_physical_bdry_polygon,
-    #                 num_bisection_iterations,
-    #                 max_movement_mag,
-    #                 success_condition_stay_in,
-    #             )
+    # calculate volume exclusion effects
+    num_bisection_iterations = 2
+    max_movement_mag = const_protrusive / vertex_eta
+    success_condition_stay_out = 0
+
+    for other_ci in range(num_cells):
+        if other_ci != cell_ix:
+            are_new_nodes_inside_other_cell = \
+                geometry.are_points_inside_polygon(
+                new_verts, all_cells_verts[other_ci]
+            )
+
+            for ni in range(16):
+                if are_new_nodes_inside_other_cell[ni] != \
+                        success_condition_stay_out:
+                    new_verts[ni] = determine_volume_exclusion_effects(
+                        verts[ni],
+                        new_verts[ni],
+                        uivs[ni],
+                        all_cells_verts[other_ci],
+                        num_bisection_iterations,
+                        max_movement_mag,
+                        success_condition_stay_out,
+                    )
 
     poly_area = geometry.calculate_polygon_area(verts)
     data = [("poly", [[float(v) for v in x] for x in verts]),
