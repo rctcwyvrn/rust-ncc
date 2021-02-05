@@ -19,27 +19,16 @@ HEADER_LABELS = ["num_tsteps", "num_cells", "num_int_steps", "eta",
                  "num_rand_vs", "total_rgtp"]
 BASICS = ["poly", "rac_acts", "rac_inacts", "rho_acts", "rho_inacts",
           "sum_forces"]
-BASICS_COLORS = ["black", "blue", "slateblue", "red", "indianred", "tab:blue"]
 GEOMETRY = ["uivs"]
-GEOMETRY_COLORS = ["black"]
 RAC_RATES = ["kgtps_rac", "kdgtps_rac"]
-RAC_RATES_COLORS = ["deepskyblue", "violet"]
 RHO_RATES = ["kgtps_rho", "kdgtps_rho"]
-RHO_RATES_COLORS = ["orangered", "lightblue"]
-FORCES = ["rgtp_forces", "edge_forces", "cyto_forces"]
-FORCES_COLORS = ["darkolivegreen", "steelblue", "mediumvioletred"]
+FORCES = ["rgtp_forces", "edge_forces", "edge_forces_minus", "cyto_forces"]
 CALC_KGTPS_RAC = ["conc_rac_acts", "x_cils", "x_coas"]
-CALC_KGTPS_RAC_COLORS = ["blueviolet", "gold", "lightseagreen"]
 DIFFUSION = ["rac_act_net_fluxes"]
-DIFFUSION_COLORS = ["teal"]
-OTHERS = ["edge_strains", "poly_area", "coa_update", "cil_update"]
-OTHERS_COLORS = ["tab:orange", "green", "cadetblue", "darkgoldenrod"]
+OTHERS = ["edge_strains", "uevs", "poly_area", "coa_update", "cil_update"]
 
 DATA_LABELS = BASICS + GEOMETRY + RAC_RATES + RHO_RATES + FORCES + \
               CALC_KGTPS_RAC + DIFFUSION + OTHERS
-DATA_COLORS = BASICS_COLORS + GEOMETRY_COLORS + RAC_RATES_COLORS + \
-              RHO_RATES_COLORS + FORCES_COLORS + CALC_KGTPS_RAC_COLORS + \
-              DIFFUSION_COLORS + OTHERS_COLORS
 
 WRITE_FOLDER = "B:\\rust-ncc\\model-comparison\\py-out\\"
 WRITE_FILE_NAME_TEMPLATE = "out_euler_T={}_E={}_NC={}_CIL={}_COA={}.dat"
@@ -128,8 +117,6 @@ class Writer:
             self.params["num_cells"],
             int(self.params["cil_mag"]), int(self.params["coa_mag"] * 16)
         )
-        if os.path.exists(self.write_file_path):
-            os.remove(self.write_file_path)
         self.finished = False
 
     def confirm_int_steps_empty(self):
@@ -162,6 +149,8 @@ class Writer:
             self.main_buffer["tsteps"].append(copy.deepcopy(self.tstep_buffer))
             self.tstep_buffer = [list() for _ in range(self.num_cells)]
             if len(self.main_buffer["tsteps"]) == self.num_tsteps:
+                if os.path.exists(self.write_file_path):
+                    os.remove(self.write_file_path)
                 with open(self.write_file_path, "wb") as f:
                     f.write(orjson.dumps(self.main_buffer))
                 self.finished = True

@@ -23,7 +23,7 @@ use crate::NVERTS;
 
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::f32::consts::PI;
+use std::f64::consts::PI;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct Cells {
@@ -121,10 +121,10 @@ pub struct World {
     writer: Writer,
 }
 
-fn gen_poly(centroid: &V2D, radius: f32) -> [V2D; NVERTS] {
+fn gen_poly(centroid: &V2D, radius: f64) -> [V2D; NVERTS] {
     let mut r = [V2D::default(); NVERTS];
     (0..NVERTS).for_each(|vix| {
-        let vf = (vix as f32) / (NVERTS as f32);
+        let vf = (vix as f64) / (NVERTS as f64);
         let theta = 2.0 * PI * vf;
         r[vix] = V2D {
             x: centroid.x + theta.cos() * radius,
@@ -237,7 +237,7 @@ impl World {
         }
     }
 
-    pub fn simulate(&mut self, final_tpoint: f32) {
+    pub fn simulate(&mut self, final_tpoint: f64) {
         let num_tsteps = (final_tpoint / self.char_quants.time()).ceil() as u32;
         let num_int_steps = 10;
         let mut writer = self.writer.init(
@@ -248,7 +248,7 @@ impl World {
             self.world_params
                 .interactions
                 .coa
-                .map_or_else(|| 0, |p| (p.mag as f32 * NVERTS as f32) as u32),
+                .map_or_else(|| 0, |p| (p.mag as f64 * NVERTS as f64) as u32),
         );
         writer.save_header(
             &self.char_quants,
@@ -275,7 +275,7 @@ impl World {
         if !writer.finished {
             panic!(
                 format!(
-                    "Unfinished writer. num_tsteps to store: {}, num_tsteps stored: {}", 
+                    "Unfinished writer. num_tsteps to store: {}, num_tsteps stored: {}",
                     writer.num_tsteps, writer.data.tsteps.len()
                 )
             )
@@ -308,8 +308,8 @@ fn gen_cell_centroids(cg: &CellGroup) -> Result<Vec<V2D>, String> {
             let row = ix / layout.width;
             let col = ix - layout.width * row;
             let cg = first_cell_centroid
-                + (row as f32) * row_delta
-                + (col as f32) * col_delta;
+                + (row as f64) * row_delta
+                + (col as f64) * col_delta;
             r.push(cg);
         }
         Ok(r)

@@ -7,14 +7,15 @@ use crate::cell::mechanics::{
 };
 use crate::interactions::{Interactions, RelativeRgtpActivity};
 use crate::math::v2d::V2D;
-use crate::math::{hill_function3, max_f32, min_f32};
+use crate::math::{hill_function3, max_f64, min_f64};
 use crate::parameters::{Parameters, WorldParameters};
 use crate::utils::circ_ix_minus;
 use crate::NVERTS;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fmt::Display;
+use std::io::Write;
 use std::ops::{Add, Div, Mul, Sub};
+use std::{fmt, io};
 
 /// `CoreState` contains all the variables that are simulated within
 /// geometric updates. That is, they are modelled using ODEs which
@@ -25,13 +26,13 @@ pub struct CoreState {
     /// Polygon representing cell shape.
     pub poly: [V2D; NVERTS],
     /// Fraction of Rac1 active at each vertex.
-    pub rac_acts: [f32; NVERTS],
+    pub rac_acts: [f64; NVERTS],
     /// Fraction of Rac1 inactive at each vertex.
-    pub rac_inacts: [f32; NVERTS],
+    pub rac_inacts: [f64; NVERTS],
     /// Fraction of RhoA active at each vertex.
-    pub rho_acts: [f32; NVERTS],
+    pub rho_acts: [f64; NVERTS],
     /// Fraction of RhoA inactive at each vertex.
-    pub rho_inacts: [f32; NVERTS],
+    pub rho_inacts: [f64; NVERTS],
 }
 
 impl Add for CoreState {
@@ -39,10 +40,10 @@ impl Add for CoreState {
 
     fn add(self, rhs: CoreState) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = self.poly[i] + rhs.poly[i];
@@ -67,10 +68,10 @@ impl Sub for CoreState {
 
     fn sub(self, rhs: CoreState) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = self.poly[i] - rhs.poly[i];
@@ -95,10 +96,10 @@ impl Div for CoreState {
 
     fn div(self, rhs: CoreState) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = self.poly[i] / rhs.poly[i];
@@ -118,15 +119,15 @@ impl Div for CoreState {
     }
 }
 
-impl Mul<CoreState> for f32 {
+impl Mul<CoreState> for f64 {
     type Output = CoreState;
 
     fn mul(self, rhs: CoreState) -> CoreState {
         let mut poly = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             poly[i] = self * rhs.poly[i];
@@ -151,7 +152,7 @@ impl Mul<CoreState> for f32 {
 pub struct MechState {
     /// Strain each edge is under, where resting edge length is
     /// defined in the cell's parameters.
-    pub edge_strains: [f32; NVERTS],
+    pub edge_strains: [f64; NVERTS],
     /// Forces on each vertex due to Rho GTPase activity.
     pub rgtp_forces: [V2D; NVERTS],
     /// Forces on each vertex due to cytoplasmic pressure.
@@ -160,10 +161,11 @@ pub struct MechState {
     pub edge_forces: [V2D; NVERTS],
     /// Average of the strain in edges which are under tension (i.e.
     /// they are longer than their initial resting edge length.
-    pub avg_tens_strain: f32,
+    pub avg_tens_strain: f64,
     /// Sum of all forces that are acting on a vertex, except for
     /// adhesion, which comes from interaction information.
     pub sum_forces: [V2D; NVERTS],
+    pub edge_forces_minus: [V2D; 16],
 }
 
 /// Calculates the various rates necessary to define the ODEs
@@ -180,21 +182,21 @@ pub struct MechState {
 /// how stretched the cell is).
 #[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ChemState {
-    pub kdgtps_rac: [f32; NVERTS],
-    pub kgtps_rac: [f32; NVERTS],
-    pub rac_act_net_fluxes: [f32; NVERTS],
-    pub rac_inact_net_fluxes: [f32; NVERTS],
-    pub kdgtps_rho: [f32; NVERTS],
-    pub kgtps_rho: [f32; NVERTS],
-    pub rac_cyto: f32,
-    pub rho_cyto: f32,
-    pub rho_act_net_fluxes: [f32; NVERTS],
-    pub rho_inact_net_fluxes: [f32; NVERTS],
-    pub x_tens: f32,
-    pub conc_rac_acts: [f32; 16],
-    pub conc_rac_inacts: [f32; 16],
-    pub conc_rho_acts: [f32; 16],
-    pub conc_rho_inacts: [f32; 16],
+    pub kdgtps_rac: [f64; NVERTS],
+    pub kgtps_rac: [f64; NVERTS],
+    pub rac_act_net_fluxes: [f64; NVERTS],
+    pub rac_inact_net_fluxes: [f64; NVERTS],
+    pub kdgtps_rho: [f64; NVERTS],
+    pub kgtps_rho: [f64; NVERTS],
+    pub rac_cyto: f64,
+    pub rho_cyto: f64,
+    pub rho_act_net_fluxes: [f64; NVERTS],
+    pub rho_inact_net_fluxes: [f64; NVERTS],
+    pub x_tens: f64,
+    pub conc_rac_acts: [f64; 16],
+    pub conc_rac_inacts: [f64; 16],
+    pub conc_rho_acts: [f64; 16],
+    pub conc_rho_inacts: [f64; 16],
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -208,7 +210,7 @@ pub struct GeomState {
     /// this example).
     pub unit_edge_vecs: [V2D; NVERTS],
     /// Length of edges. Each edge is defined by its smallest vertex.
-    pub edge_lens: [f32; NVERTS],
+    pub edge_lens: [f64; NVERTS],
     /// Inward pointing unit vectors at each vertex. These are
     /// calculated so that they bisect the angle between the two
     /// edges which meet at a vertex.
@@ -295,13 +297,14 @@ impl CoreState {
     pub fn calc_geom_state(&self) -> GeomState {
         // Calculate edge vectors of a polygon.
         let evs = calc_edge_vecs(&self.poly);
+        // println!("edge_vecs: {:?}", evs);
         // Calculate magnitude of each edge vec, to get its length.
-        let mut edge_lens = [0.0_f32; NVERTS];
-        (0..NVERTS).for_each(|i| edge_lens[i] = (&evs[i]).mag());
+        let mut edge_lens = [0.0_f64; NVERTS];
+        (0..NVERTS).for_each(|i| edge_lens[i] = evs[i].mag());
         // Divide each edge vector by its magnitude to get the
         // corresponding unit vector.
         let mut uevs = [V2D::default(); NVERTS];
-        (0..NVERTS).for_each(|i| uevs[i] = (&evs[i]).unitize());
+        (0..NVERTS).for_each(|i| uevs[i] = (1.0 / edge_lens[i]) * evs[i]);
         // Given two unit edge vectors, find the vector which points
         // into the polygon and bisects the angle
         let mut uivs = [V2D::default(); NVERTS];
@@ -343,7 +346,7 @@ impl CoreState {
             parameters.stiffness_cyto,
         );
         // Calculate strain in each edge.
-        let mut edge_strains = [0.0_f32; NVERTS];
+        let mut edge_strains = [0.0_f64; NVERTS];
         (0..NVERTS).for_each(|i| {
             edge_strains[i] = (edge_lens[i] / parameters.rest_edge_len) - 1.0
         });
@@ -359,19 +362,37 @@ impl CoreState {
         let avg_tens_strain = edge_strains
             .iter()
             .map(|&es| if es < 0.0 { 0.0 } else { es })
-            .sum::<f32>()
-            / NVERTS as f32;
+            .sum::<f64>()
+            / NVERTS as f64;
         // Sum of all the non-adhesive forces acting on the cell.
         let mut sum_fs = [V2D::default(); NVERTS];
+        // (0..NVERTS).for_each(|i| {
+        //     sum_fs[i] = rgtp_forces[i] + cyto_forces[i] + edge_forces[i]
+        //         - edge_forces[circ_ix_minus(i, NVERTS)];
+        // });
+        let mut edge_forces_minus = [V2D::default(); NVERTS];
         (0..NVERTS).for_each(|i| {
-            sum_fs[i] = rgtp_forces[i] + cyto_forces[i] + edge_forces[i]
-                - edge_forces[circ_ix_minus(i, NVERTS)];
+            edge_forces_minus[i] = -1.0 * edge_forces[circ_ix_minus(i, NVERTS)];
+        });
+        // let mut sum_edge_forces = V2D::zeros();
+        // for (&a, &b) in edge_forces.iter().zip(edge_forces_minus.iter()) {
+        //     sum_edge_forces = a + sum_edge_forces;
+        //     sum_edge_forces = b + sum_edge_forces;
+        // }
+        // println!("norm_sum_edge_forces: {}",
+        //           sum_edge_forces.mag());
+        (0..NVERTS).for_each(|i| {
+            sum_fs[i] = rgtp_forces[i]
+                + cyto_forces[i]
+                + edge_forces[i]
+                + edge_forces_minus[i];
         });
         MechState {
             edge_strains,
             rgtp_forces,
             cyto_forces,
             edge_forces,
+            edge_forces_minus,
             avg_tens_strain,
             sum_forces: sum_fs,
         }
@@ -391,7 +412,7 @@ impl CoreState {
         // flux of Rho GTPase from neighbouring vertices. Provides
         // an approximation for the length of the membrane abstracted
         // by the edges that meet at that vertex.
-        let mut avg_edge_lens: [f32; NVERTS] = [0.0_f32; NVERTS];
+        let mut avg_edge_lens: [f64; NVERTS] = [0.0_f64; NVERTS];
         (0..NVERTS).for_each(|i| {
             let im1 = circ_ix_minus(i, NVERTS);
             avg_edge_lens[i] = (edge_lens[i] + edge_lens[im1]) / 2.0;
@@ -469,11 +490,11 @@ impl CoreState {
         );
 
         let rac_cyto = parameters.total_rgtp
-            - self.rac_acts.iter().sum::<f32>()
-            - self.rac_inacts.iter().sum::<f32>();
+            - self.rac_acts.iter().sum::<f64>()
+            - self.rac_inacts.iter().sum::<f64>();
         let rho_cyto = parameters.total_rgtp
-            - self.rho_acts.iter().sum::<f32>()
-            - self.rho_inacts.iter().sum::<f32>();
+            - self.rho_acts.iter().sum::<f64>()
+            - self.rho_inacts.iter().sum::<f64>();
         ChemState {
             x_tens,
             kdgtps_rac,
@@ -502,6 +523,10 @@ impl CoreState {
     /// `[CoreState]/[Time]`, but since time is normalized, this is
     /// the same as having units of `[CoreState]`.
     pub fn dynamics_f(
+        talkative: bool,
+        dt: f64,
+        tstep: u32,
+        int_step: i32,
         state: &CoreState,
         rac_rand_state: &RacRandState,
         inter_state: &Interactions,
@@ -552,6 +577,38 @@ impl CoreState {
                 rho_cyto_exchange + vertex_rho_inact_flux - delta_rho_activated;
             delta.poly[i] = (1.0 / world_parameters.vertex_eta)
                 * (mech_state.sum_forces[i] + inter_state.x_adhs[i]);
+            #[allow(clippy::print_with_newline)]
+            if (i == 0 || i == 15) && talkative {
+                println!("tstep: {}, int_step: {}", tstep, int_step);
+                print!("eta: {}\n", world_parameters.vertex_eta);
+                print!("1/eta: {}\n", 1.0 / world_parameters.vertex_eta);
+                print!("rgtp_forces[{}]: {}\n", i, mech_state.rgtp_forces[i]);
+                print!("edge_forces[{}]: {}\n", i, mech_state.edge_forces[i]);
+                print!(
+                    "edge_forces_minus[{}]: {}\n",
+                    i, mech_state.edge_forces_minus[i]
+                );
+                print!("cyto_forces[{}]: {}\n", i, mech_state.cyto_forces[i]);
+                print!(
+                    "rgtp_forces + cyto_forces + edge_forces + \
+                edge_forces_minus = {}\n",
+                    mech_state.rgtp_forces[i]
+                        + mech_state.edge_forces[i]
+                        + mech_state.edge_forces_minus[i]
+                        + mech_state.cyto_forces[i]
+                );
+                print!("sum_forces[{}]: {}\n", i, mech_state.sum_forces[i]);
+                print!("delta.poly[{}]: {}\n", i, delta.poly[i]);
+                print!(
+                    "expected Delta poly ({}): {}\n",
+                    i,
+                    dt * (1.0 / world_parameters.vertex_eta)
+                        * (mech_state.rgtp_forces[i]
+                            + mech_state.edge_forces[i]
+                            + mech_state.edge_forces_minus[i]
+                            + mech_state.cyto_forces[i])
+                );
+            }
         }
         delta
     }
@@ -561,7 +618,7 @@ impl CoreState {
         init_rac: RgtpDistribution,
         init_rho: RgtpDistribution,
     ) -> CoreState {
-        // x_cils: [f32; NVERTS], x_coas: [f32; NVERTS], x_chemoas: [f32; NVERTS], x_rands: [f32; NVERTS], x_bdrys: [f32; NVERTS];
+        // x_cils: [f64; NVERTS], x_coas: [f64; NVERTS], x_chemoas: [f64; NVERTS], x_rands: [f64; NVERTS], x_bdrys: [f64; NVERTS];
         CoreState {
             poly: vertex_coords,
             rac_acts: init_rac.active,
@@ -571,12 +628,12 @@ impl CoreState {
         }
     }
 
-    pub fn scalar_mul(&self, s: f32) -> CoreState {
+    pub fn scalar_mul(&self, s: f64) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = s * self.poly[i];
@@ -595,12 +652,12 @@ impl CoreState {
         }
     }
 
-    pub fn scalar_add(&self, s: f32) -> CoreState {
+    pub fn scalar_add(&self, s: f64) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = s + self.poly[i];
@@ -621,10 +678,10 @@ impl CoreState {
 
     pub fn abs(&self) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].abs();
@@ -645,10 +702,10 @@ impl CoreState {
 
     pub fn powi(&self, x: i32) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].powi(x);
@@ -669,17 +726,17 @@ impl CoreState {
 
     pub fn max(&self, other: &CoreState) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].max(&other.poly[i]);
-            rac_acts[i] = max_f32(self.rac_acts[i], other.rac_acts[i]);
-            rac_inacts[i] = max_f32(self.rac_inacts[i], other.rac_inacts[i]);
-            rho_acts[i] = max_f32(self.rho_acts[i], other.rho_acts[i]);
-            rho_inacts[i] = max_f32(self.rho_inacts[i], other.rho_inacts[i]);
+            rac_acts[i] = max_f64(self.rac_acts[i], other.rac_acts[i]);
+            rac_inacts[i] = max_f64(self.rac_inacts[i], other.rac_inacts[i]);
+            rho_acts[i] = max_f64(self.rho_acts[i], other.rho_acts[i]);
+            rho_inacts[i] = max_f64(self.rho_inacts[i], other.rho_inacts[i]);
         }
 
         CoreState {
@@ -693,17 +750,17 @@ impl CoreState {
 
     pub fn min(&self, other: &CoreState) -> CoreState {
         let mut vertex_coords = [V2D::default(); NVERTS];
-        let mut rac_acts = [0.0_f32; NVERTS];
-        let mut rac_inacts = [0.0_f32; NVERTS];
-        let mut rho_acts = [0.0_f32; NVERTS];
-        let mut rho_inacts = [0.0_f32; NVERTS];
+        let mut rac_acts = [0.0_f64; NVERTS];
+        let mut rac_inacts = [0.0_f64; NVERTS];
+        let mut rho_acts = [0.0_f64; NVERTS];
+        let mut rho_inacts = [0.0_f64; NVERTS];
 
         for i in 0..(NVERTS) {
             vertex_coords[i] = vertex_coords[i].min(&other.poly[i]);
-            rac_acts[i] = min_f32(self.rac_acts[i], other.rac_acts[i]);
-            rac_inacts[i] = min_f32(self.rac_inacts[i], other.rac_inacts[i]);
-            rho_acts[i] = min_f32(self.rho_acts[i], other.rho_acts[i]);
-            rho_inacts[i] = min_f32(self.rho_inacts[i], other.rho_inacts[i]);
+            rac_acts[i] = min_f64(self.rac_acts[i], other.rac_acts[i]);
+            rac_inacts[i] = min_f64(self.rac_inacts[i], other.rac_inacts[i]);
+            rho_acts[i] = min_f64(self.rho_acts[i], other.rho_acts[i]);
+            rho_inacts[i] = min_f64(self.rho_inacts[i], other.rho_inacts[i]);
         }
 
         CoreState {
@@ -715,8 +772,8 @@ impl CoreState {
         }
     }
 
-    pub fn sum(&self) -> f32 {
-        let mut r: f32 = 0.0;
+    pub fn sum(&self) -> f64 {
+        let mut r: f64 = 0.0;
 
         for i in 0..(NVERTS) {
             r += self.poly[i].x + self.poly[i].y;
@@ -729,8 +786,8 @@ impl CoreState {
         r
     }
 
-    pub fn average(&self) -> f32 {
-        self.sum() / (Self::num_vars() as f32)
+    pub fn average(&self) -> f64 {
+        self.sum() / (Self::num_vars() as f64)
     }
 
     /// Calculate which Rho GTPase has dominates in terms of effect
@@ -745,7 +802,7 @@ impl CoreState {
             .zip(self.rho_acts.iter())
             .enumerate()
             .for_each(|(ix, (&rac, &rho))| {
-                r[ix] = RelativeRgtpActivity::from_f32(
+                r[ix] = RelativeRgtpActivity::from_f64(
                     hill_function3(parameters.halfmax_vertex_rgtp_act, rac)
                         - hill_function3(
                             parameters.halfmax_vertex_rgtp_act,
@@ -762,40 +819,40 @@ impl CoreState {
         loc_str: &str,
         parameters: &Parameters,
     ) -> Result<(), String> {
-        if self.rac_acts.iter().any(|&r| r < 0.0_f32) {
+        if self.rac_acts.iter().any(|&r| r < 0.0_f64) {
             return Err(format!(
                 "{}: neg rac_acts: {:?}",
                 loc_str, self.rac_acts
             ));
         }
-        if self.rac_inacts.iter().any(|&r| r < 0.0_f32) {
+        if self.rac_inacts.iter().any(|&r| r < 0.0_f64) {
             return Err(format!(
                 "{}: neg rac_inacts: {:?}",
                 loc_str, self.rac_inacts
             ));
         }
-        if self.rho_acts.iter().any(|&r| r < 0.0_f32) {
+        if self.rho_acts.iter().any(|&r| r < 0.0_f64) {
             return Err(format!(
                 "{}: neg rho_acts: {:?}",
                 loc_str, self.rho_acts
             ));
         }
-        if self.rho_inacts.iter().any(|&r| r < 0.0_f32) {
+        if self.rho_inacts.iter().any(|&r| r < 0.0_f64) {
             return Err(format!(
                 "{}: neg rho_inacts: {:?}",
                 loc_str, self.rho_inacts
             ));
         }
-        let sum_rac_mem = self.rac_inacts.iter().sum::<f32>()
-            + self.rac_acts.iter().sum::<f32>();
+        let sum_rac_mem = self.rac_inacts.iter().sum::<f64>()
+            + self.rac_acts.iter().sum::<f64>();
         if sum_rac_mem > parameters.total_rgtp || sum_rac_mem < 0.0 {
             return Err(format!(
                 "{}: problem in sum of rac_mem: {}",
                 loc_str, sum_rac_mem
             ));
         }
-        let sum_rho_mem = self.rho_inacts.iter().sum::<f32>()
-            + self.rho_acts.iter().sum::<f32>();
+        let sum_rho_mem = self.rho_inacts.iter().sum::<f64>()
+            + self.rho_acts.iter().sum::<f64>();
         if sum_rho_mem > parameters.total_rgtp || sum_rho_mem < 0.0 {
             return Err(format!(
                 "{}: problem in sum of rho_mem: {}",

@@ -69,7 +69,7 @@ def calculate_kgtp_rac(
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def calculate_kgtp_rho(
         conc_rho_act,
         intercellular_contact_factors,
@@ -100,7 +100,7 @@ def calculate_kgtp_rho(
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def calculate_kdgtp_rac(
         conc_rho_acts,
         halfmax_vertex_rgtp_conc,

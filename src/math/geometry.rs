@@ -8,7 +8,7 @@
 
 use crate::math::v2d::V2D;
 use crate::math::{
-    close_to_zero, in_unit_interval, max_f32s, min_f32s, InUnitInterval,
+    close_to_zero, in_unit_interval, max_f64s, min_f64s, InUnitInterval,
 };
 use crate::utils::{circ_ix_minus, circ_ix_plus};
 use crate::NVERTS;
@@ -40,10 +40,10 @@ impl Poly {
 
 /// Calculate the area of a polygon with vertices positioned at `xys`.
 /// [ref](http://geomalgorithms.com/a01-_area.html)
-pub fn calc_poly_area(xys: &[V2D]) -> f32 {
+pub fn calc_poly_area(xys: &[V2D]) -> f64 {
     let nvs = xys.len();
 
-    let mut area = 0.0_f32;
+    let mut area = 0.0_f64;
     for i in 0..nvs {
         let j = circ_ix_plus(i, nvs);
         let k = circ_ix_minus(i, nvs);
@@ -55,10 +55,10 @@ pub fn calc_poly_area(xys: &[V2D]) -> f32 {
 
 #[derive(Copy, Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
 pub struct BBox {
-    pub xmin: f32,
-    pub ymin: f32,
-    pub xmax: f32,
-    pub ymax: f32,
+    pub xmin: f64,
+    pub ymin: f64,
+    pub xmax: f64,
+    pub ymax: f64,
 }
 
 impl BBox {
@@ -72,18 +72,18 @@ impl BBox {
     }
 
     pub fn from_points(ps: &[V2D]) -> BBox {
-        let xs: Vec<f32> = ps.iter().map(|v| v.x).collect();
-        let ys: Vec<f32> = ps.iter().map(|v| v.y).collect();
+        let xs: Vec<f64> = ps.iter().map(|v| v.x).collect();
+        let ys: Vec<f64> = ps.iter().map(|v| v.y).collect();
         BBox {
-            xmin: min_f32s(&xs),
-            ymin: min_f32s(&ys),
-            xmax: max_f32s(&xs),
-            ymax: max_f32s(&ys),
+            xmin: min_f64s(&xs),
+            ymin: min_f64s(&ys),
+            xmax: max_f64s(&xs),
+            ymax: max_f64s(&ys),
         }
     }
 
     #[inline]
-    pub fn expand_by(&self, l: f32) -> BBox {
+    pub fn expand_by(&self, l: f64) -> BBox {
         BBox {
             xmin: self.xmin - l,
             ymin: self.ymin - l,
@@ -120,39 +120,83 @@ impl Display for BBox {
 }
 
 pub fn is_point_in_poly(
-    p: &V2D,
-    poly_bbox: Option<&BBox>,
+    test_point: &V2D,
     poly: &[V2D],
+    talkative: bool,
 ) -> bool {
-    if let Some(bb) = poly_bbox {
-        if !bb.contains(p) {
-            return false;
-        }
-    }
     let mut wn: isize = 0;
     let nverts = poly.len();
+    let test_point = test_point.round(4);
     for vi in 0..nverts {
-        let p0 = &poly[vi];
-        let p1 = &poly[circ_ix_plus(vi, nverts)];
+        let p_start = &poly[vi].round(4);
+        let p_end = &poly[circ_ix_plus(vi, nverts)].round(4);
 
-        if (p0.y - p.y).abs() < f32::EPSILON || p0.y < p.y {
-            if p1.y > p.y {
-                if let IsLeftResult::Left = is_left_points(p0, p1, p) {
-                    wn += 1;
-                }
-            }
-        } else if (p1.y - p.y).abs() < f32::EPSILON || p1.y < p.y {
-            if let IsLeftResult::Right = is_left_points(p0, p1, p) {
-                wn -= 1;
-            }
+        // if talkative {
+        //     println!(
+        //         "abs(p_start.y - test_point.y): {}",
+        //         (p_start.y - test_point.y).abs()
+        //     );
+        //     println!(
+        //         "psy: {}, pey: {}, tpy: {}",
+        //         p_start.y, p_end.y, test_point.y
+        //     )
+        // }
+        // p_start_y <= test_point_y < p_end_y
+        let psy_eq_tpy = (p_start.y - test_point.y).abs() < 1e-8;
+        if psy_eq_tpy && (p_start.x - test_point.y).abs() < 1e-8 {
+            continue;
         }
+        let psy_leq_tpy = psy_eq_tpy || p_start.y < test_point.y;
+        let tpy_le_pey = test_point.y < p_end.y;
+        let cond0 = psy_leq_tpy && tpy_le_pey;
+        // if talkative {
+        //     println!("psy == tpy: {}", psy_eq_tpy);
+        //     println!("psy <= tpy: {}", psy_leq_tpy);
+        //     println!("tpy < pey: {}", tpy_le_pey);
+        //     println!("psy <= tpy < pey: {}", cond0);
+        // }
+
+        // p_end_y < test_point_y <= p_start_y
+        let tpy_le_psy = p_end.y < test_point.y;
+        let tpy_leq_psy = psy_eq_tpy || test_point.y < p_start.y;
+        let cond1 = tpy_leq_psy && tpy_le_psy;
+        // if talkative {
+        //     println!("psy == tpy: {}", psy_eq_tpy);
+        //     println!("tpy <= py: {}", tpy_leq_psy);
+        //     println!("pey < tpy: {}", test_point.y < p_start.y);
+        //     println!("pey < tpy <= psy: {}", cond1);
+        // }
+
+        if talkative {
+            println!("ovi: {}, cond0: {}, cond1: {}", vi, cond0, cond1);
+        }
+        if cond0
+            && is_left_by_points_py(p_start, p_end, &test_point, talkative)
+                > 0.0
+        {
+            if talkative {
+                println!("upward crossing");
+            }
+            wn += 1;
+        } else if cond1
+            && is_left_by_points_py(p_start, p_end, &test_point, talkative)
+                < 0.0
+        {
+            if talkative {
+                println!("downward crossing");
+            }
+            wn -= 1;
+        }
+    }
+    if talkative {
+        println!("wn = {}, wn != 0 == {}", wn, wn != 0);
     }
     wn != 0
 }
 
 /// A line segment from p0 to p1 is the set of points `q = tp + p0`,
 /// where `p = (p1 - p0)`, and `0 <= t <= 1`.
-#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct LineSeg2D {
     /// First point defining line segment.
     pub p0: V2D,
@@ -162,7 +206,7 @@ pub struct LineSeg2D {
     pub vector: V2D,
     /// Bounding box of the segment.
     bbox: BBox,
-    pub len: f32,
+    pub len: f64,
 }
 
 impl Display for LineSeg2D {
@@ -177,16 +221,16 @@ impl Display for LineSeg2D {
 
 #[derive(Copy, Clone)]
 pub enum IntersectCalcResult {
-    Strict(f32, f32),
-    Weak(f32, f32),
+    Strict(f64, f64),
+    Weak(f64, f64),
     TwoNonIdenticalPoints,
     NoBBoxOverlap,
     SelfIsPointNotOnOther,
     SelfIsCollinearPointNotOnOther,
     OtherIsCollinearPointNotOnSelf,
     OtherIsPointNotOnSelf,
-    IntersectionPointNotOnSelf(f32),
-    IntersectionPointNotOnOther(f32),
+    IntersectionPointNotOnSelf(f64),
+    IntersectionPointNotOnOther(f64),
     ParallelLineSegs,
 }
 
@@ -255,12 +299,12 @@ pub fn is_left(lseg: &LineSeg2D, p: &V2D) -> IsLeftResult {
 
 /// Version of `is_left` which takes a point-wise definition of the focus
 /// line segment.
-#[inline(always)]
-pub fn is_left_points(p0: &V2D, p1: &V2D, p: &V2D) -> IsLeftResult {
+#[allow(clippy::print_with_newline)]
+pub fn is_left_by_points(p0: &V2D, p1: &V2D, p: &V2D) -> IsLeftResult {
     let r = p - &p0;
     let vector = p1 - p0;
     let cross = vector.x * r.y - vector.y * r.x;
-
+    print!("cp: {}\n", cross);
     if close_to_zero(cross) {
         IsLeftResult::Collinear
     } else if cross > 0.0 {
@@ -268,6 +312,24 @@ pub fn is_left_points(p0: &V2D, p1: &V2D, p: &V2D) -> IsLeftResult {
     } else {
         IsLeftResult::Right
     }
+}
+
+/// Version of `is_left` which takes a point-wise definition of the focus
+/// line segment. It also does not check for collinearity.
+#[allow(clippy::print_with_newline)]
+pub fn is_left_by_points_py(
+    p0: &V2D,
+    p1: &V2D,
+    p: &V2D,
+    talkative: bool,
+) -> f64 {
+    let r = p - &p0;
+    let vector = p1 - p0;
+    let cross = vector.x * r.y - vector.y * r.x;
+    if talkative {
+        print!("cp: {}\n", cross);
+    }
+    cross
 }
 
 pub enum CheckIntersectResult {
@@ -392,7 +454,7 @@ impl LineSeg2D {
         // `o` be a point on the "other" line segment, such that:
         // `s = t * self.p + self.p0`
         // `o = u * self.p + self.p0`
-        // where `t: f32`, and `u: f32`.
+        // where `t: f64`, and `u: f64`.
 
         // Let `dx_s = p.x = self.p1.x - self.p0.x`; similarly, let
         // `dy_s = p.y`, `dx_o` and `dy_o` be defined analogously.
@@ -543,12 +605,12 @@ impl LineSeg2D {
     }
 
     #[inline]
-    pub fn mag(&self) -> f32 {
+    pub fn mag(&self) -> f64 {
         self.vector.mag()
     }
 }
 
-// pub fn refine_raw_poly(raw_poly: [[f32; 2]; 16]) -> [V2d; 16] {
+// pub fn refine_raw_poly(raw_poly: [[f64; 2]; 16]) -> [V2d; 16] {
 //     let mut r = [V2d::default(); 16];
 //     for (q, p) in r.iter_mut().zip(raw_poly.iter()) {
 //         q.x = p[0];

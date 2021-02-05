@@ -70,11 +70,8 @@ class Cell:
         self.halfmax_vertex_rgtp_act = params["halfmax_vertex_rgtp_act"]
         self.halfmax_vertex_rgtp_conc = params["halfmax_vertex_rgtp_conc"]
 
-        self.kdgtp_rac = params["kdgtp_rac"] * self.t
-        self.kdgtp_rho_on_rac = (
-                params[
-                    "kdgtp_rho_on_rac"] * self.t
-        )
+        self.kdgtp_rac = params["kdgtp_rac"]
+        self.kdgtp_rho_on_rac = params["kdgtp_rho_on_rac"]
 
         self.halfmax_tension_inhib = params[
             "halfmax_tension_inhib"
@@ -156,7 +153,7 @@ class Cell:
             parameters.kdgtp_rac_ix,
             parameters.kdgtp_rho_ix,
             parameters.local_strains_ix,
-            parameters.x_cil_ix,
+            parameters.old_x_cil_ix,
         ]
 
         self.initialize_pars_indices()
@@ -187,9 +184,7 @@ class Cell:
     # -----------------------------------------------------------------
     def initialize_cell(
             self,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            all_cells_verts,
+            close_point_smoothness_factors, x_cils, x_coas,
     ):
         verts = self.curr_verts
 
@@ -197,75 +192,23 @@ class Cell:
         self.curr_state[:, parameters.edge_lengths_ix] = \
             self.rest_edge_len * np.ones(16)
 
-        self.set_rgtp_distrib(
-            self.init_rac, self.init_rho,
-        )
+        if self.cell_ix == 0:
+            self.set_rgtp_distrib(
+                self.init_rac, self.init_rho,
+            )
+        else:
+            self.set_rgtp_distrib(
+                self.init_rho, self.init_rac,
+            )
+
 
         rac_acts = self.curr_state[:, parameters.rac_act_ix]
         rho_acts = self.curr_state[:, parameters.rho_act_ix]
 
-        x_coas = chemistry.calculate_x_coas(
-            self.num_cells,
-            self.cell_ix,
-            self.coa_distrib_exp,
-            self.coa_mag,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            self.coa_los_penalty,
-        )
-        self.curr_state[:, parameters.x_coa_ix] = x_coas
         self.curr_state[:, parameters.old_x_coa_ix] = x_coas
-
-        are_nodes_inside_other_cells = \
-            geometry.check_if_nodes_inside_other_cells(
-                self.cell_ix, 16, self.num_cells,
-                all_cells_verts)
-
-        close_point_on_other_cells_to_each_node_exists, \
-        close_point_on_other_cells_to_each_node, \
-        close_point_on_other_cells_to_each_node_indices, \
-        close_point_on_other_cells_to_each_node_projection_factors, \
-        close_point_smoothness_factors = \
-            geometry.do_close_points_to_each_node_on_other_cells_exist(
-                self.num_cells, 16, self.cell_ix,
-                all_cells_verts[self.cell_ix],
-                intercellular_squared_dist_array,
-                self.close_zero_at,
-                self.close_one_at,
-                all_cells_verts, are_nodes_inside_other_cells)
-        x_cils = chemistry.calc_x_cils(self.cell_ix, self.num_cells,
-                                       self.cil_mag,
-                                       close_point_smoothness_factors)
-        self.curr_state[:, parameters.x_cil_ix] = x_cils
         self.curr_state[:, parameters.old_x_cil_ix] = x_cils
 
-        np.zeros(
-            (16, self.num_cells), dtype=np.int64
-        )
-        np.zeros(
-            (16,
-             self.num_cells,
-             2),
-            dtype=np.float64)
-        np.zeros(
-            (16, self.num_cells, 2), dtype=np.int64
-        )
-        np.zeros(
-            (16, self.num_cells), dtype=np.int64
-        )
-        close_point_smoothness_factors = np.zeros(
-            (16, self.num_cells), dtype=np.float64
-        )
-        np.zeros(
-            (self.num_cells, 2), dtype=np.float64
-        )
-        np.zeros(
-            (self.num_cells,
-             16,
-             2),
-            dtype=np.float64)
-
-        sum_forces, edge_forces_plus, edge_forces_minus, rgtpase_forces, \
+        sum_forces, edge_forces_plus, edge_forces_minus, uevs, rgtpase_forces, \
         cyto_forces, \
         edge_strains, local_strains, uivs = \
             mechanics.calculate_forces(
@@ -429,11 +372,9 @@ class Cell:
     def set_next_state(
             self,
             next_state_array,
-            this_cell_ix,
-            num_cells,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            close_point_smoothness_factors
+            close_point_smoothness_factors,
+            x_cils,
+            x_coas,
     ):
         self.curr_tstep += 1
         self.insert_state_array_into_system_history(next_state_array)
@@ -446,26 +387,8 @@ class Cell:
             edge_displacement_vectors_plus)
 
         self.curr_state[:, parameters.edge_lengths_ix] = edge_lengths
-
-        x_coas = chemistry.calculate_x_coas(
-            self.num_cells,
-            self.cell_ix,
-            self.coa_distrib_exp,
-            self.coa_mag,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            self.coa_los_penalty,
-        )
-        self.curr_state[:, parameters.old_x_coa_ix] = \
-            self.curr_state[:, parameters.x_coa_ix]
-        self.curr_state[:, parameters.x_coa_ix] = x_coas
-
-        x_cils = chemistry.calc_x_cils(self.cell_ix, self.num_cells,
-                                       self.cil_mag,
-                                       close_point_smoothness_factors)
-        self.curr_state[:, parameters.old_x_cil_ix] = \
-            self.curr_state[:, parameters.x_cil_ix]
-        self.curr_state[:, parameters.x_cil_ix] = x_cils
+        self.curr_state[:, parameters.old_x_coa_ix] = x_coas
+        self.curr_state[:, parameters.old_x_cil_ix] = x_cils
 
         # ==================================
         if self.curr_tstep == self.next_randomization_event_tpoint:
@@ -484,15 +407,8 @@ class Cell:
         rac_acts = self.curr_state[:, parameters.rac_act_ix]
         rho_acts = self.curr_state[:, parameters.rho_act_ix]
 
-        x_coas = chemistry.calculate_x_coas(
-            num_cells,
-            this_cell_ix,
-            self.coa_distrib_exp,
-            self.coa_mag,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            self.coa_los_penalty,
-        )
+        self.curr_state[:, parameters.old_x_cil_ix] = x_cils
+        self.curr_state[:, parameters.old_x_coa_ix] = x_coas
 
         rac_cyto = (
                 1
@@ -513,7 +429,7 @@ class Cell:
         self.curr_state[:, parameters.rho_cyto_ix] = (rho_cyto *
                                                       insertion_array)
 
-        sum_forces, edge_forces_plus, edge_forces_minus, rgtp_forces, \
+        sum_forces, edge_forces_plus, edge_forces_minus, uevs, rgtp_forces, \
         cyto_forces, \
         edge_strains, local_strains, unit_inside_pointing_vecs = \
             mechanics.calculate_forces(
@@ -606,8 +522,6 @@ class Cell:
 
         self.curr_state[:, [parameters.uiv_x_ix,
                             parameters.uiv_y_ix]] = unit_inside_pointing_vecs
-
-        self.curr_state[:, parameters.x_cil_ix] = x_cils
         self.curr_verts = verts
 
     # -----------------------------------------------------------------
@@ -615,44 +529,38 @@ class Cell:
             self,
             all_cells_verts,
             close_point_smoothness_factors,
+            x_cils, x_coas,
     ):
-        x_coas = self.curr_state[:, parameters.x_coa_ix]
 
-        print("-----------------------------------")
-        np.set_printoptions(suppress=True)
-        print("tstep: {}, cell: {}".format(self.curr_tstep, self.cell_ix))
-        coa_update = np.abs(self.curr_state[:, parameters.x_coa_ix] -
-                            self.curr_state[:, parameters.old_x_coa_ix]) < 1e-4
-        if np.any(coa_update):
-            print("old_coa = {}".format([float(x) if not x.is_integer() else
-                                         int(x) for x in np.round(self.curr_state[:,
-                                                                  parameters.x_coa_ix], 4)]))
-            print("new_coa = {}".format([float(x) if not x.is_integer() else
-                                         int(x) for x in np.round(self.curr_state[:,
-                                                                  parameters.x_coa_ix], 4)]))
-        else:
-            print("old_coa = no change")
-            print("new_coa = no change")
+        # print("-----------------------------------")
+        # np.set_printoptions(suppress=True)
+        # print("tstep: {}, cell: {}".format(self.curr_tstep, self.cell_ix))
+        coa_update = np.abs(self.curr_state[:, parameters.old_x_coa_ix] -
+                            x_coas) > 1e-4
+        # if np.any(coa_update):
+        #     print("old_coa = {}".format([float(x) if not x.is_integer() else
+        #                                  int(x) for x in
+        #                                  np.round(self.curr_state[:,
+        #                                           parameters.old_x_coa_ix], 4)]))
+        #     print("new_coa = {}".format([float(x) if not x.is_integer() else
+        #                                  int(x) for x in np.round(x_coas, 4)]))
+        # else:
+        #     print("old_coa = no change")
+        #     print("new_coa = no change")
 
-        x_cils = chemistry.calc_x_cils(self.cell_ix, self.num_cells,
-                                       self.cil_mag,
-                                       close_point_smoothness_factors)
-        self.curr_state[:, parameters.old_x_cil_ix] = \
-            self.curr_state[:, parameters.x_cil_ix]
-        self.curr_state[:, parameters.x_cil_ix] = x_cils
-        cil_update = np.abs(self.curr_state[:, parameters.old_x_cil_ix] -
-                            self.curr_state[:, parameters.x_cil_ix]) < 1e-4
-        if np.any(cil_update):
-            print("old_cil = {}".format([float(x) if not x.is_integer() else
-                                         int(x) for x in np.round(self.curr_state[:,
-                                                                  parameters.old_x_cil_ix], 4)]))
-            print("new_cil = {}".format([float(x) if not x.is_integer() else
-                                         int(x) for x in np.round(self.curr_state[:,
-                                                                  parameters.x_cil_ix], 4)]))
-        else:
-            print("old_cil = no change")
-            print("new_cil = no change")
-        print("-----------------------------------")
+        cil_update = np.abs(x_cils -
+                            self.curr_state[:, parameters.old_x_cil_ix]) > 1e-4
+        # if np.any(cil_update):
+        #     print("old_cil = {}".format([float(x) if not x.is_integer() else
+        #                                  int(x) for x in
+        #                                  np.round(self.curr_state[:,
+        #                                           parameters.old_x_cil_ix], 4)]))
+        #     print("new_cil = {}".format([float(x) if not x.is_integer() else
+        #                                  int(x) for x in np.round(x_cils, 4)]))
+        # else:
+        #     print("old_cil = no change")
+        #     print("new_cil = no change")
+        # print("-----------------------------------")
 
         return (
             self.num_cells,
@@ -699,8 +607,9 @@ class Cell:
             self,
             this_cell_ix,
             all_cells_verts,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
+            close_point_smoothness_factors,
+            x_cils,
+            x_coas,
             writer,
     ):
         dynamics.print_var = True
@@ -713,40 +622,24 @@ class Cell:
             self.curr_state,
         )
 
-        are_nodes_inside_other_cells = \
-            geometry.check_if_nodes_inside_other_cells(
-                self.cell_ix, 16, self.num_cells,
-                all_cells_verts)
-
-        close_point_on_other_cells_to_each_node_exists, \
-        close_point_on_other_cells_to_each_node, \
-        close_point_on_other_cells_to_each_node_indices, \
-        close_point_on_other_cells_to_each_node_projection_factors, \
-        close_point_smoothness_factors = \
-            geometry.do_close_points_to_each_node_on_other_cells_exist(
-                self.num_cells, 16, self.cell_ix,
-                all_cells_verts[self.cell_ix],
-                intercellular_squared_dist_array,
-                self.close_zero_at,
-                self.close_one_at,
-                all_cells_verts, are_nodes_inside_other_cells)
-
         rhs_args = self.pack_rhs_arguments(all_cells_verts,
-                                           close_point_smoothness_factors)
+                                           close_point_smoothness_factors,
+                                           x_cils, x_coas)
 
         output_array = dynamics.eulerint(
             dynamics.cell_dynamics, state_array, np.array([0, 1]),
-            rhs_args, self.num_int_steps, self.cell_ix, writer)
+            rhs_args, self.num_int_steps, self.cell_ix, self.curr_tstep,
+            self.rac_act_ix, self.rac_inact_ix,
+            self.rho_act_ix, self.rho_inact_ix,
+            self.x_ix, self.y_ix, writer)
 
         next_state_array = output_array[1]
 
         self.set_next_state(
             next_state_array,
-            this_cell_ix,
-            num_cells,
-            intercellular_squared_dist_array,
-            line_segment_intersection_matrix,
-            close_point_smoothness_factors
+            close_point_smoothness_factors,
+            x_cils,
+            x_coas,
         )
 
 # ===============================================================

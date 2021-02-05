@@ -442,8 +442,8 @@ def check_sign_projection_of_a_on_b(a, b):
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def is_left(p0, p1, p2):
+#@nb.jit(nopython=True)
+def is_left(p0, p1, p2, talkative=False):
     """
     Input:  three points P0, P1, and P2
     Return: > 0 for P2 left of the line through P0 to P1
@@ -454,6 +454,8 @@ def is_left(p0, p1, p2):
     p1x, p1y = p1
     p2x, p2y = p2
 
+    if talkative:
+        print((p1x - p0x) * (p2y - p0y) - (p2x - p0x) * (p1y - p0y))
     return (p1x - p0x) * (p2y - p0y) - (p2x - p0x) * (p1y - p0y)
 
 
@@ -557,17 +559,14 @@ def calc_init_cell_bbs(
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+# @nb.jit(nopython=True)
 def is_point_in_polygon_bb_given_bb(
         test_point, min_x, max_x, min_y, max_y
 ):
     tp_x = test_point[0]
     tp_y = test_point[1]
 
-    if (min_x < tp_x < max_x) and (min_y < tp_y < max_y):
-        return 1
-    else:
-        return 0
+    return (min_x < tp_x < max_x) and (min_y < tp_y < max_y)
 
 
 # -----------------------------------------------------------------
@@ -582,43 +581,75 @@ def is_point_in_polygon_bb(test_point, polygon):
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def is_point_in_polygon_without_bb_check(test_point, polygon):
+#@nb.jit(nopython=True)
+def is_point_in_polygon_without_bb_check(test_point, polygon, talkative=False):
     num_vertices = polygon.shape[0]
     wn = 0
-    test_point_y = test_point[1]
+    test_point_y = np.around(test_point[1], 4)
 
     # count number of intersections of positive-x direction ray emanating from test_point with polygon edges
     for i in range(num_vertices):
         p_start = polygon[i]
         p_end = polygon[(i + 1) % num_vertices]
 
-        p_start_y = p_start[1]
+        p_start_y = np.around(p_start[1], 4)
 
-        p_end_y = p_end[1]
+        p_end_y = np.around(p_end[1], 4)
 
-        if p_start_y <= test_point_y < p_end_y:
+        # if talkative:
+        #     print("abs(p_start.y - test_point.y): {}".format(np.abs(p_start_y -
+        #                                                             test_point_y)))
+        #     print("psy: {}, pey: {}, tpy: {}".format(p_start_y, p_end_y, test_point_y))
+        psy_eq_tpy = np.abs(p_start_y - test_point_y) < 1e-8
+
+        if psy_eq_tpy and (np.abs(p_start[0] - test_point[0]) < 1e-8):
+            continue
+        psy_leq_tpy = psy_eq_tpy or p_start_y < test_point_y#p_start_y <= test_point_y
+        tpy_le_pey = test_point_y < p_end_y
+        cond0 = psy_leq_tpy and tpy_le_pey
+        #
+        # if talkative:
+        #     print("psy == tpy: {}".format(psy_eq_tpy))
+        #     print("psy <= tpy: {}".format(psy_leq_tpy))
+        #     print("pey < tpy: {}".format(tpy_le_pey))
+        #     print("psy <= tpy < pey: {}".format(cond0))
+
+        pey_le_tpy = p_end_y < test_point_y
+        tpy_leq_psy = psy_eq_tpy or test_point_y < p_start_y# test_point_y <= p_start_y
+        cond1 = pey_le_tpy and tpy_leq_psy
+
+        # if talkative:
+        #     print("psy == tpy: {}".format(psy_eq_tpy))
+        #     print("tpy <= py: {}".format(tpy_leq_psy))
+        #     print("pey < tpy: {}".format(pey_le_tpy))
+        #     print("pey < tpy <= psy: {}".format(cond1))
+            
+        if talkative:
+            print("ovi: {}, cond0: {}, cond1: {}".format(i, cond0, cond1))
+        if cond0:
             # upward crossing
-            is_tp_left_of_edge = is_left(p_start, p_end, test_point)
+            is_tp_left_of_edge = is_left(p_start, p_end, test_point,
+                                         talkative=talkative)
 
             if is_tp_left_of_edge > 0:
+                if talkative:
+                    print("upward crossing")
                 # positive-x direction ray emanating from test_point wil intersect with this edge if left of it
-                wn = wn + 1
-        elif p_end_y < test_point_y <= p_start_y:
+                wn += 1
+        elif cond1:
             # downward crossing
-            is_tp_left_of_edge = is_left(p_start, p_end, test_point)
+            is_tp_left_of_edge = is_left(p_start, p_end, test_point,
+                                         talkative=talkative)
 
             if is_tp_left_of_edge < 0:
+                if talkative:
+                    print("downward crossing")
                 # positive-x direction ray emanating from test_point will intersect with this edge if left of it
-                wn = wn - 1
-        else:
-            # no intersection
-            wn = wn
+                wn -= 1
 
-    if wn == 0:
-        return 0
-    else:
-        return 1
+    if talkative:
+        print("wn = {}, wn != 0 == {}".format(wn, wn != 0))
+    return wn != 0
 
 
 # -----------------------------------------------------------------
@@ -633,7 +664,7 @@ def is_point_in_polygon(test_point, polygon):
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def is_point_in_polygon_given_bb(
         test_point, polygon, min_x, max_x, min_y, max_y
 ):
@@ -641,10 +672,8 @@ def is_point_in_polygon_given_bb(
         test_point, min_x, max_x, min_y, max_y
     )
 
-    if is_test_point_in_poly_bb == 0:
-        return 0
-    else:
-        return is_point_in_polygon_without_bb_check(test_point, polygon)
+    return is_test_point_in_poly_bb and \
+           is_point_in_polygon_without_bb_check(test_point, polygon)
 
 
 # -----------------------------------------------------------------
@@ -665,19 +694,20 @@ def is_point_in_polygons(point, polygons):
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def are_points_inside_polygon(points, polygon):
+#@nb.jit(nopython=True)
+def are_points_inside_polygon(points, polygon, talkative=False):
     num_points = points.shape[0]
-    results = np.zeros(num_points, dtype=np.int64)
+    results = np.zeros(num_points, dtype=np.bool)
 
-    min_x, max_x, min_y, max_y = calculate_polygon_bb(polygon)
+    # min_x, max_x, min_y, max_y = calculate_polygon_bb(polygon)
 
     for index in range(num_points):
         test_point = points[index]
-
-        results[index] = is_point_in_polygon_given_bb(
-            test_point, polygon, min_x, max_x, min_y, max_y
-        )
+        if talkative:
+            print("testing vertex: {}".format(index))
+        results[index] = is_point_in_polygon_without_bb_check(test_point,
+                                                              polygon,
+                                                              talkative)
 
     return results
 
@@ -705,7 +735,7 @@ def are_points_inside_polygons(points, polygons):
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def check_if_nodes_inside_other_cells(
         this_cell_ix, num_vertices, num_cells, all_cells_verts
 ):
@@ -1107,7 +1137,7 @@ def closeness_smoothening_linear_function(zero_until, one_at, x):
         return m * x + b
 
 
-@nb.jit(nopython=True)
+#@nb.jit(nopython=True)
 def do_close_points_to_each_node_on_other_cells_exist(
         num_cells,
         num_vertices,

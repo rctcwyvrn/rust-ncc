@@ -14,6 +14,13 @@ Should be 0.5f32.ln() / range, not 0.5f32.ln() / (range * 0.5)
 
 * set randomization std factor to 0.1
 
+* average CIL over neighbour nodes for kgtps_rho
+    -> should CIL/CAL be averaged over neighbour nodes?
+
+* consider putting in point in poly check for ClosePoint
+calcs (useful for CIL in particular?)
+
+
 Following are not errors, but recommended changes:
 1) remove char kgtp/kdgtp, and only have char kgtp
 2) rename halfmax_vertex_rgtp_act to halfmax_vertex_rgtp

@@ -34,19 +34,19 @@ use serde::{Deserialize, Serialize};
 /// dominates, otherwise it is negative.
 #[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub enum RelativeRgtpActivity {
-    RhoDominant(f32),
-    RacDominant(f32),
+    RhoDominant(f64),
+    RacDominant(f64),
 }
 
 impl RelativeRgtpActivity {
-    pub fn to_f32(&self) -> f32 {
+    pub fn to_f64(&self) -> f64 {
         match self {
             RelativeRgtpActivity::RacDominant(value) => *value,
             RelativeRgtpActivity::RhoDominant(value) => *value,
         }
     }
 
-    pub fn from_f32(value: f32) -> Self {
+    pub fn from_f64(value: f64) -> Self {
         if value > 0.0 {
             RacDominant(value)
         } else {
@@ -59,22 +59,22 @@ impl RelativeRgtpActivity {
     pub fn mix_rel_rgtp_act_across_edge(
         smaller_vertex: RelativeRgtpActivity,
         bigger_vertex: RelativeRgtpActivity,
-        t: f32,
+        t: f64,
     ) -> RelativeRgtpActivity {
-        RelativeRgtpActivity::from_f32(
-            smaller_vertex.to_f32() * (1.0 - t) + bigger_vertex.to_f32() * t,
+        RelativeRgtpActivity::from_f64(
+            smaller_vertex.to_f64() * (1.0 - t) + bigger_vertex.to_f64() * t,
         )
     }
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct Interactions {
-    pub x_cals: [f32; NVERTS],
-    pub x_cils: [f32; NVERTS],
+    pub x_cals: [f64; NVERTS],
+    pub x_cils: [f64; NVERTS],
     pub x_adhs: [V2D; NVERTS],
-    pub x_chem_attrs: [f32; NVERTS],
-    pub x_coas: [f32; NVERTS],
-    pub x_bdrys: [f32; NVERTS],
+    pub x_chem_attrs: [f64; NVERTS],
+    pub x_coas: [f64; NVERTS],
+    pub x_bdrys: [f64; NVERTS],
 }
 
 /// Generates interaction related factors.
@@ -82,7 +82,7 @@ pub struct Interactions {
 pub struct InteractionGenerator {
     /// Vertex coordinates, per cell, for all cells in the simulation.
     cell_polys: Vec<Poly>,
-    cell_relative_rgtp_acts: Vec<[RelativeRgtpActivity; NVERTS]>,
+    all_rgtps: Vec<[RelativeRgtpActivity; NVERTS]>,
     /// Generates CIL/CAL related interaction information. In other
     /// words, interactions that require cells to engage in physical
     /// contact.
@@ -92,6 +92,7 @@ pub struct InteractionGenerator {
     bdry_generator: Option<BdryEffectGenerator>,
 }
 
+#[derive(Clone, Copy)]
 pub struct ContactData {
     pub oci: usize,
     pub poly: Poly,
@@ -100,7 +101,7 @@ pub struct ContactData {
 impl InteractionGenerator {
     pub fn new(
         cell_verts: &[[V2D; NVERTS]],
-        cell_relative_rgtp_acts: &[[RelativeRgtpActivity; NVERTS]],
+        cell_rgtps: &[[RelativeRgtpActivity; NVERTS]],
         params: InteractionParams,
     ) -> InteractionGenerator {
         let cell_polys = cell_verts
@@ -116,7 +117,7 @@ impl InteractionGenerator {
         let bdry_generator = params.bdry.map(BdryEffectGenerator::new);
         InteractionGenerator {
             cell_polys: cell_polys.iter().copied().collect(),
-            cell_relative_rgtp_acts: cell_rgtps.iter().copied().collect(),
+            all_rgtps: cell_rgtps.iter().copied().collect(),
             phys_contact_generator,
             coa_generator,
             chem_attr_generator,
@@ -124,14 +125,8 @@ impl InteractionGenerator {
         }
     }
 
-    pub fn update(
-        &mut self,
-        cell_ix: usize,
-        vs: &[V2D; NVERTS],
-        relative_rgtp_act: &[RelativeRgtpActivity; NVERTS],
-    ) {
+    pub fn update(&mut self, cell_ix: usize, vs: &[V2D; NVERTS]) {
         self.cell_polys[cell_ix] = Poly::from_points(vs);
-        self.cell_relative_rgtp_acts[cell_ix] = relative_rgtp_act.clone();
         if let Some(coa_gen) = self.coa_generator.as_mut() {
             coa_gen.update(cell_ix, &self.cell_polys)
         }
@@ -147,7 +142,6 @@ impl InteractionGenerator {
 
     pub fn generate(
         &self,
-        cell_ix: usize,
         rel_rgtps: &[[RelativeRgtpActivity; NVERTS]],
     ) -> Vec<Interactions> {
         let num_cells = self.cell_polys.len();

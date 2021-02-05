@@ -11,15 +11,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct VertexPairInfo {
-    dist: f32,
-    num_intersects: f32,
+    dist: f64,
+    num_intersects: f64,
 }
 
 impl VertexPairInfo {
     pub fn infinity() -> VertexPairInfo {
         VertexPairInfo {
-            dist: f32::INFINITY,
-            num_intersects: f32::INFINITY,
+            dist: f64::INFINITY,
+            num_intersects: f64::INFINITY,
         }
     }
 }
@@ -46,6 +46,7 @@ pub struct CoaGenerator {
 /// does not contain the endpoints of `lseg`. Note that case `1` is unlikely, but
 /// possible especially in the initial if cells have been initialized in a
 /// regular lattice.
+#[allow(unused)]
 pub fn check_other_poly_intersect(lseg: &LineSeg2D, poly: &Poly) -> bool {
     if lseg.intersects_bbox(&poly.bbox) {
         for edge in poly.edges.iter() {
@@ -62,7 +63,7 @@ pub fn check_other_poly_intersect(lseg: &LineSeg2D, poly: &Poly) -> bool {
     false
 }
 
-pub fn is_left_py(p0: &V2D, p1: &V2D, p2: &V2D) -> f32 {
+pub fn is_left_py(p0: &V2D, p1: &V2D, p2: &V2D) -> f64 {
     let (p0x, p0y) = (p0.x, p0.y);
     let (p1x, p1y) = (p1.x, p1.y);
     let (p2x, p2y) = (p2.x, p2.y);
@@ -186,6 +187,7 @@ pub fn check_root_poly_intersect_py(
 /// It could be that that `lseg` one of `A` or `B`, the "root" polygons of `lseg`.
 /// This function checks if this has occurred, but ignores intersections
 /// involving the source/destination vertices of `lseg`.
+#[allow(unused)]
 pub fn check_root_poly_intersect(
     lseg: &LineSeg2D,
     poly_a: &Poly,
@@ -252,6 +254,7 @@ pub fn check_root_poly_intersect(
 }
 
 /// Calculate clearance and distance.
+#[allow(unused)]
 pub fn calc_pair_info(
     ci: usize,
     skip_vi: usize,
@@ -269,7 +272,7 @@ pub fn calc_pair_info(
     ) {
         return VertexPairInfo {
             dist: lseg.len,
-            num_intersects: f32::INFINITY,
+            num_intersects: f64::INFINITY,
         };
     }
     let clearance = cell_polys
@@ -283,7 +286,7 @@ pub fn calc_pair_info(
                 0.0
             }
         })
-        .sum::<f32>();
+        .sum::<f64>();
     VertexPairInfo {
         dist: lseg.len,
         num_intersects: clearance,
@@ -306,9 +309,9 @@ pub fn calc_pair_info_py(
     let coords_b = lseg.p1;
     let normal_to_lseg = lseg.vector.normal();
 
-    if ci == 0 && oci == 1 && skip_vi == 1 && skip_ovi == 6 {
-        let x = 1 + 2;
-    }
+    // if ci == 0 && oci == 1 && skip_vi == 1 && skip_ovi == 6 {
+    //     let x = 1 + 2;
+    // }
 
     let check_a = check_root_poly_intersect_py(
         &coords_a,
@@ -418,9 +421,9 @@ impl CoaGenerator {
         }
     }
 
-    pub fn generate(&self) -> Vec<[f32; NVERTS]> {
+    pub fn generate(&self) -> Vec<[f64; NVERTS]> {
         let num_cells = self.contacts.num_cells;
-        let mut all_x_coas = vec![[0.0f32; NVERTS]; num_cells];
+        let mut all_x_coas = vec![[0.0f64; NVERTS]; num_cells];
         let CoaParams {
             los_penalty,
             mag,
@@ -449,7 +452,7 @@ impl CoaGenerator {
                             let coa_signal =
                                 (distrib_exp * dist).exp() * los_factor;
                             let additional_signal = mag * coa_signal;
-                            let old_coa = *x_coa;
+                            let _old_coa = *x_coa;
                             *x_coa += additional_signal;
 
                             // println!("coa_signal: {}", coa_signal);

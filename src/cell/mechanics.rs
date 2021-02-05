@@ -13,29 +13,33 @@ use crate::utils::circ_ix_plus;
 use crate::NVERTS;
 
 /// Calculate edge vectors of a polygon.
-pub fn calc_edge_vecs(
-    vertex_coords: &[V2D; NVERTS],
-) -> [V2D; NVERTS] {
+pub fn calc_edge_vecs(vertex_coords: &[V2D; NVERTS]) -> [V2D; NVERTS] {
     let mut r = [V2D::default(); NVERTS];
     (0..NVERTS).for_each(|i| {
-        let plus_i = circ_ix_plus(i, NVERTS);
-        r[i] = vertex_coords[plus_i] - vertex_coords[i];
+        r[i] = vertex_coords[circ_ix_plus(i, NVERTS)] - vertex_coords[i];
     });
     r
 }
 
 /// Calculate elastic forces due to stretching of edges.
 pub fn calc_edge_forces(
-    edge_strains: &[f32; NVERTS],
+    edge_strains: &[f64; NVERTS],
     edge_unit_vecs: &[V2D; NVERTS],
-    stiffness_edge: f32,
+    stiffness_edge: f64,
 ) -> [V2D; NVERTS] {
     let mut r = [V2D::default(); NVERTS];
-    (0..NVERTS).for_each(|i| {
-        // Elastic relationship: stiffness * strain = magnitude of
-        // force. Direction of force is along the unite edge vector.
-        r[i] = edge_strains[i] * stiffness_edge * edge_unit_vecs[i]
-    });
+
+    for i in 0..NVERTS {
+        let es = edge_strains[i];
+        let euv = edge_unit_vecs[i];
+        let ef = es * stiffness_edge * euv;
+        r[i] = ef;
+    }
+    // (0..NVERTS).for_each(|i| {
+    //     // Elastic relationship: stiffness * strain = magnitude of
+    //     // force. Direction of force is along the unite edge vector.
+    //     r[i] = edge_strains[i] * stiffness_edge * edge_unit_vecs[i]
+    // });
     r
 }
 
@@ -46,8 +50,8 @@ pub fn calc_edge_forces(
 pub fn calc_cyto_forces(
     vertex_coords: &[V2D; NVERTS],
     unit_inward_vecs: &[V2D; NVERTS],
-    rest_area: f32,
-    stiffness_cyto: f32,
+    rest_area: f64,
+    stiffness_cyto: f64,
 ) -> [V2D; NVERTS] {
     let mut r = [V2D::default(); NVERTS];
     let area = calc_poly_area(vertex_coords);
@@ -66,12 +70,12 @@ pub fn calc_cyto_forces(
 /// activity, and the force generated. The shape of the sigmoid is
 /// governed by `halfmax_vertex_rgtp_act`.
 pub fn calc_rgtp_forces(
-    rac_acts: &[f32; NVERTS],
-    rho_acts: &[f32; NVERTS],
+    rac_acts: &[f64; NVERTS],
+    rho_acts: &[f64; NVERTS],
     unit_inward_vecs: &[V2D; NVERTS],
-    halfmax_vertex_rgtp_act: f32,
-    const_protrusive: f32,
-    const_retractive: f32,
+    halfmax_vertex_rgtp_act: f64,
+    const_protrusive: f64,
+    const_retractive: f64,
 ) -> [V2D; NVERTS] {
     let mut r = [V2D::default(); NVERTS];
     for i in 0..NVERTS {
@@ -86,18 +90,10 @@ pub fn calc_rgtp_forces(
         // which points in the direction `uiv`.
         let mag = if ra > pa {
             -1.0 * const_protrusive
-                * capped_linear_fn(
-                    ra - pa,
-                    0.0,
-                    2.0 * halfmax_vertex_rgtp_act,
-                )
+                * capped_linear_fn(ra - pa, 0.0, 2.0 * halfmax_vertex_rgtp_act)
         } else {
             const_retractive
-                * capped_linear_fn(
-                    pa - ra,
-                    0.0,
-                    2.0 * halfmax_vertex_rgtp_act,
-                )
+                * capped_linear_fn(pa - ra, 0.0, 2.0 * halfmax_vertex_rgtp_act)
         };
 
         r[i] = mag * uiv;

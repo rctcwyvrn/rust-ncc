@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # ===========================================================================
 
-NUM_TSTEPS = 18
+NUM_TSTEPS = 1800
 NUM_CELLS = 2
 COA = 24
 CIL = 60
@@ -13,11 +13,10 @@ NUM_INT_STEPS = 10
 py_out = read_save_file("py", NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL, COA)
 rust_out = read_save_file("rust", NUM_TSTEPS, NUM_INT_STEPS, NUM_CELLS, CIL,
                           COA)
-
 check_header_equality(py_out, rust_out)
 
-py_data_dict_per_cell = gen_data_dict_per_cell(py_out)
-rust_data_dict_per_cell = gen_data_dict_per_cell(rust_out)
+py_data_dict_per_cell = gen_data_dict_per_cell_tsteps(py_out)
+rust_data_dict_per_cell = gen_data_dict_per_cell_tsteps(rust_out)
 
 
 # ===========================================================================

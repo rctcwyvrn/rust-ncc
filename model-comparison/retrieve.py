@@ -17,7 +17,7 @@ def read_save_file(model_ty, num_tsteps, num_int_steps, num_cells, cil_mag,
 
 
 # Input data has the form: data_per_int_step_per_cell_per_tstep
-def gen_data_dict_per_cell(data):
+def gen_data_dict_per_cell_tsteps(data):
     num_cells = data["header"]["num_cells"]
     tstep_data = data["tsteps"]
     data_dict_per_cell = [dict() for ix in range(num_cells)]
@@ -30,6 +30,27 @@ def gen_data_dict_per_cell(data):
             data_per_tstep_for_cell = np.array(data_per_tstep_for_cell)
             data_dict_per_cell[ix][label] = copy.deepcopy(
                 data_per_tstep_for_cell)
+
+    return data_dict_per_cell
+
+
+# Input data has the form: data_per_int_step_per_cell_per_tstep
+def gen_data_dict_per_cell_int_steps(data):
+    num_cells = data["header"]["num_cells"]
+    num_int_steps = data["header"]["num_int_steps"]
+    tstep_data = data["tsteps"]
+    data_dict_per_cell = [dict() for ix in range(num_cells)]
+    for ix in range(num_cells):
+        for label in hio.DATA_LABELS:
+            data_per_int_step_for_cell = list()
+            for cells_per_tstep in tstep_data:
+                tstep = cells_per_tstep[ix]
+                for i in range(num_int_steps):
+                    data_per_int_step_for_cell.append(copy.deepcopy(tstep[i][
+                                                                        label]))
+            data_per_int_step_for_cell = np.array(data_per_int_step_for_cell)
+            data_dict_per_cell[ix][label] = copy.deepcopy(
+                data_per_int_step_for_cell)
 
     return data_dict_per_cell
 
@@ -57,8 +78,9 @@ def check_header_equality(py_dat, rust_dat):
                 while pdx * pd_mul > 1:
                     pd_mul *= 0.1
                 if abs(pdx - rdx) * pd_mul > 1e-6:
-                    raise Exception("does not match! py {}: {}, r {}: {}".format(
-                        label, pd, label, rd))
+                    raise Exception(
+                        "does not match! py {}: {}, r {}: {}".format(
+                            label, pd, label, rd))
         else:
             while pd * pd_mul > 1:
                 pd_mul *= 0.1

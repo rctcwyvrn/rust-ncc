@@ -38,9 +38,7 @@ output_chem_labels = [
     "rho_act",
     "rho_inact",
     "rho_cyto",
-    "x_coa",
     "old_x_coa",
-    "x_cil",
     "old_x_cil",
     "kgtp_rac",
     "kgtp_rho",
@@ -95,6 +93,11 @@ parameter_labels = ["cell_r",
                     "total_rgtp"]
 
 # -----------------------------------------------------------------
+def calc_coa_distrib_exp(coa_range):
+    if coa_range > 1e-3:
+        return np.log(0.5) / (0.5 * coa_range)
+    else:
+        return 0.0
 
 
 def refine_raw_params(raw_params):
@@ -102,7 +105,7 @@ def refine_raw_params(raw_params):
 
     params["coa_mag"] = raw_params["coa_mag"] / 16
     params["coa_range"] = raw_params["coa_range"] / params["l"]
-    params["coa_distrib_exp"] = (np.log(0.5) / (0.5 * params["coa_range"]))
+    params["coa_distrib_exp"] = calc_coa_distrib_exp(params["coa_range"])
     params["init_cyto_rgtp"] = 1 - raw_params["init_inact_rgtp"] - \
                                     raw_params["init_act_rgtp"]
     # --------------

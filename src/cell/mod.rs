@@ -15,16 +15,18 @@ use crate::cell::chemistry::RacRandState;
 use crate::cell::rkdp5::AuxArgs;
 use crate::cell::states::{ChemState, CoreState, GeomState, MechState};
 use crate::interactions::{ContactData, Interactions};
-use crate::math::geometry::{calc_poly_area, check_strong_intersection};
+use crate::math::close_to_zero;
+use crate::math::geometry::{
+    calc_poly_area, check_strong_intersection, is_point_in_poly,
+};
 use crate::math::v2d::V2D;
-use crate::math::{close_to_zero, round};
 use crate::parameters::{Parameters, WorldParameters};
 use crate::utils::pcg32::Pcg32;
 use crate::utils::{circ_ix_minus, circ_ix_plus};
 use crate::world::pyio::{IntStepData, Writer};
 use crate::NVERTS;
 use serde::{Deserialize, Serialize};
-use std::f32::consts::PI;
+use std::f64::consts::PI;
 
 /// Cell state structure.
 #[derive(Copy, Clone, Deserialize, Serialize, PartialEq, Default, Debug)]
@@ -43,8 +45,8 @@ pub struct Cell {
     pub geom: GeomState,
     /// Chemical state (various reaction rates).
     pub chem: ChemState,
-    pub old_x_coas: [f32; NVERTS],
-    pub old_x_cils: [f32; NVERTS],
+    pub old_x_coas: [f64; NVERTS],
+    pub old_x_cils: [f64; NVERTS],
 }
 
 pub fn violates_volume_exclusion(
@@ -114,6 +116,132 @@ pub fn confirm_volume_exclusion(
     Ok(())
 }
 
+#[allow(clippy::print_with_newline)]
+pub fn enforce_volume_exclusion_py(
+    talkative: bool,
+    old_vs: &[V2D; NVERTS],
+    mut new_vs: [V2D; NVERTS],
+    contacts: Vec<ContactData>,
+    dt: f64,
+    const_protrusive: f64,
+    vertex_eta: f64,
+    uivs: &[V2D; NVERTS],
+) -> Result<[V2D; NVERTS], String> {
+    let num_bisection_iters: usize = 10;
+    let max_movement = dt * const_protrusive / vertex_eta;
+
+    for contact in contacts {
+        let ContactData {
+            oci,
+            poly: other_poly,
+            ..
+        } = contact;
+        if talkative {
+            println!("testing poly: {}", oci);
+            println!(
+                "poly: [{}]",
+                other_poly
+                    .verts
+                    .iter()
+                    .map(|v| format!("[{}, {}]", v.x, v.y))
+                    .collect::<Vec<String>>()
+                    .join(",\n")
+            );
+            println!("max_movement: {}", max_movement);
+        }
+        let are_new_verts_in_poly = new_vs
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                // if talkative {
+                //     println!("testing vertex: {}", i);
+                // }
+                is_point_in_poly(v, &other_poly.verts, false)
+            })
+            .collect::<Vec<bool>>();
+        if talkative {
+            println!(
+                "in poly: [{}]",
+                are_new_verts_in_poly
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ix, &in_poly)| if in_poly {
+                        Some(ix.to_string())
+                    } else {
+                        None
+                    })
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        }
+
+        for ni in 0..NVERTS {
+            if are_new_verts_in_poly[ni] {
+                if talkative {
+                    println!(
+                        "fixing vertex {} violation (current: [{}, {}])",
+                        ni, new_vs[ni].x, new_vs[ni].y
+                    );
+                }
+                let mut ok_v = old_vs[ni];
+
+                while is_point_in_poly(&ok_v, &other_poly.verts, false) {
+                    let trial_ok = ok_v + max_movement * uivs[ni];
+                    if talkative {
+                        println!(
+                            "trial old v: [{}, {}]",
+                            trial_ok.x, trial_ok.y
+                        );
+                    }
+                    ok_v = trial_ok;
+                }
+                if talkative {
+                    println!(
+                        "settling with okay v: [{}, {}] (in poly: \
+                    {})",
+                        ok_v.x,
+                        ok_v.y,
+                        is_point_in_poly(&ok_v, &other_poly.verts, false)
+                    );
+                }
+
+                let mut problem_v = new_vs[ni];
+                if talkative {
+                    println!("problem v: [{}, {}]", problem_v.x, problem_v.y);
+                }
+
+                for _ in 0..num_bisection_iters {
+                    let tp = 0.5 * (ok_v + problem_v);
+                    if talkative {
+                        println!("testing: [{}, {}]", tp.x, tp.y);
+                    }
+                    if is_point_in_poly(&tp, &other_poly.verts, false) {
+                        problem_v = tp;
+                        if talkative {
+                            println!("setting as problem");
+                        }
+                    } else {
+                        ok_v = tp;
+                        if talkative {
+                            println!("setting as ok")
+                        }
+                    }
+                }
+
+                new_vs[ni] = ok_v;
+                if talkative {
+                    println!(
+                        "returning ok: [{}, {}]",
+                        new_vs[ni].x, new_vs[ni].y
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(new_vs)
+}
+
 pub fn enforce_volume_exclusion(
     old_vs: &[V2D; NVERTS],
     mut new_vs: [V2D; NVERTS],
@@ -173,10 +301,10 @@ impl Cell {
         }
     }
 
-    #[allow(unused)]
     /// Suppose our current state is `state`. We want to determine
     /// the next state after a time period `dt` has elapsed. We
     /// assume `(next_state - state)/delta(t) = delta(state)`.
+    #[allow(unused, clippy::print_with_newline)]
     pub fn simulate_euler(
         &self,
         tstep: u32,
@@ -192,65 +320,80 @@ impl Cell {
         // Assumed normalized time by time provided in CharQuant.
         // Therefore, we can take the time period to integrate over
         // as 1.0.
-        let dt = 1.0 / (num_int_steps as f32);
-        println!("-----------------------------------");
-        println!("tstep: {}, cell: {}", tstep, self.ix);
+        let dt = 1.0 / (num_int_steps as f64);
+        let talkative = false;
+        if talkative {
+            println!("-----------------------------------");
+            println!("tstep: {}, cell: {}", tstep, self.ix);
+        }
         let mut coa_update = [false; NVERTS];
-        for i in 0..NVERTS {
-            coa_update[i] =
-                close_to_zero(self.old_x_coas[i] - interactions.x_coas[i]);
-        }
-        if coa_update.iter().any(|&x| x) {
-            println!(
-                "old_coa = [{}]",
-                self.old_x_coas
-                    .iter()
-                    .map(|&x| round(x, 4).to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-            println!(
-                "new_coa = [{}]",
-                interactions
-                    .x_coas
-                    .iter()
-                    .map(|&x| round(x, 4).to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        } else {
-            println!("old_coa = no change");
-            println!("new_coa = no change");
-        }
+        // for i in 0..NVERTS {
+        //     coa_update[i] =
+        //         !close_to_zero(self.old_x_coas[i] - interactions.x_coas[i]);
+        // }
+        // if coa_update.iter().any(|&x| x) {
+        //     println!(
+        //         "old_coa = [{}]",
+        //         self.old_x_coas
+        //             .iter()
+        //             .map(|&x| round(x, 4).to_string())
+        //             .collect::<Vec<String>>()
+        //             .join(", ")
+        //     );
+        //     println!(
+        //         "new_coa = [{}]",
+        //         interactions
+        //             .x_coas
+        //             .iter()
+        //             .map(|&x| round(x, 4).to_string())
+        //             .collect::<Vec<String>>()
+        //             .join(", ")
+        //     );
+        // } else {
+        //     println!("old_coa = no change");
+        //     println!("new_coa = no change");
+        // }
         let mut cil_update = [false; NVERTS];
         for i in 0..NVERTS {
             cil_update[i] =
-                close_to_zero(self.old_x_cils[i] - interactions.x_cils[i]);
+                !close_to_zero(self.old_x_cils[i] - interactions.x_cils[i]);
         }
-        if cil_update.iter().any(|&x| x) {
-            println!(
-                "old_cil = [{}]",
-                self.old_x_cils
-                    .iter()
-                    .map(|&x| round(x, 4).to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-            println!(
-                "new_cil = [{}]",
-                interactions
-                    .x_cils
-                    .iter()
-                    .map(|&x| round(x, 4).to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        } else {
-            println!("old_cil = no change");
-            println!("new_cil = no change");
-        }
-        println!("-----------------------------------");
-        for _ in 0..num_int_steps {
+        // if cil_update.iter().any(|&x| x) {
+        //     // println!(
+        //     //     "old_cil = [{}]",
+        //     //     self.old_x_cils
+        //     //         .iter()
+        //     //         .map(|&x| round(x, 4).to_string())
+        //     //         .collect::<Vec<String>>()
+        //     //         .join(", ")
+        //     // );
+        //     // println!(
+        //     //     "new_cil = [{}]",
+        //     //     interactions
+        //     //         .x_cils
+        //     //         .iter()
+        //     //         .map(|&x| round(x, 4).to_string())
+        //     //         .collect::<Vec<String>>()
+        //     //         .join(", ")
+        //     // );
+        // } else {
+        //     // println!("old_cil = no change");
+        //     // println!("new_cil = no change");
+        // }
+        // println!("-----------------------------------");
+        let ix = self.ix;
+        for int_step in 0..num_int_steps {
+            if talkative {
+                println!("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+");
+                println!(
+                    "init poly[0]: {:?}",
+                    [state.poly[0].x, state.poly[0].y]
+                );
+                println!(
+                    "init poly[15]: {:?}",
+                    [state.poly[15].x, state.poly[15].y]
+                );
+            }
             let geom_state = state.calc_geom_state();
             let mech_state = state.calc_mech_state(&geom_state, parameters);
             let chem_state = state.calc_chem_state(
@@ -265,7 +408,7 @@ impl Cell {
                     .poly
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
                 rac_acts: state.rac_acts,
                 rac_inacts: state.rac_inacts,
                 rho_acts: state.rho_acts,
@@ -274,12 +417,12 @@ impl Cell {
                     .sum_forces
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
                 uivs: geom_state
                     .unit_inward_vecs
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
                 kgtps_rac: chem_state.kgtps_rac,
                 kdgtps_rac: chem_state.kdgtps_rac,
                 kgtps_rho: chem_state.kgtps_rho,
@@ -288,17 +431,27 @@ impl Cell {
                     .rgtp_forces
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
                 edge_forces: mech_state
                     .edge_forces
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
+                edge_forces_minus: mech_state
+                    .edge_forces_minus
+                    .iter()
+                    .map(|v| [v.x, v.y])
+                    .collect::<Vec<[f64; 2]>>(),
+                uevs: geom_state
+                    .unit_edge_vecs
+                    .iter()
+                    .map(|v| [v.x, v.y])
+                    .collect::<Vec<[f64; 2]>>(),
                 cyto_forces: mech_state
                     .cyto_forces
                     .iter()
                     .map(|v| [v.x, v.y])
-                    .collect::<Vec<[f32; 2]>>(),
+                    .collect::<Vec<[f64; 2]>>(),
                 conc_rac_acts: chem_state.conc_rac_acts,
                 x_cils: interactions.x_cils,
                 x_coas: interactions.x_coas,
@@ -311,6 +464,10 @@ impl Cell {
             writer.save_int_step(save_data);
             // d(state)/dt = dynamics_f(state) <- calculate RHS of ODE
             let delta = CoreState::dynamics_f(
+                talkative,
+                dt,
+                tstep,
+                int_step as i32,
                 &state,
                 &self.rac_rand,
                 &interactions,
@@ -318,6 +475,33 @@ impl Cell {
                 parameters,
             );
             state = state + dt * delta;
+            let actual_dp_0 = state.poly[0] - self.core.poly[0];
+            let actual_dp_15 = state.poly[15] - self.core.poly[15];
+            // Enforcing volume exclusion! Tricky!
+            state.poly = enforce_volume_exclusion_py(
+                talkative,
+                &self.core.poly,
+                state.poly,
+                contact_data.clone(),
+                dt,
+                parameters.const_protrusive,
+                world_parameters.vertex_eta,
+                &geom_state.unit_inward_vecs,
+            )?;
+            if talkative {
+                println!("actual Delta poly(0): {}", actual_dp_0);
+                println!(
+                    "Delta poly after VE: {}",
+                    state.poly[0] - self.core.poly[0]
+                );
+                println!("final poly[0]: {:?}", state.poly[0]);
+                println!("actual Delta poly(15): {}", actual_dp_15);
+                println!(
+                    "Delta poly after VE: {}",
+                    state.poly[15] - self.core.poly[15]
+                );
+                println!("final poly[15]: {:?}", state.poly[15]);
+            }
         }
         let geom_state = state.calc_geom_state();
         let mech_state = state.calc_mech_state(&geom_state, parameters);
@@ -328,12 +512,6 @@ impl Cell {
             &interactions,
             parameters,
         );
-        // Enforcing volume exclusion! Tricky!
-        state.poly = enforce_volume_exclusion(
-            &self.core.poly,
-            state.poly,
-            contact_data,
-        )?;
         let geom_state = state.calc_geom_state();
 
         #[cfg(feature = "validate")]
@@ -368,6 +546,8 @@ impl Cell {
             init_h_factor: Some(0.1),
         };
         let result = rkdp5::integrator(
+            false,
+            tstep,
             1.0,
             CoreState::dynamics_f,
             &self.core,
@@ -412,10 +592,10 @@ impl Cell {
 }
 
 /// Calculate the area of an "ideal" initial cell of radius R, if it has n vertices.
-pub fn calc_init_cell_area(r: f32) -> f32 {
+pub fn calc_init_cell_area(r: f64) -> f64 {
     let poly_coords = (0..NVERTS)
         .map(|vix| {
-            let theta = (vix as f32) / (NVERTS as f32) * 2.0 * PI;
+            let theta = (vix as f64) / (NVERTS as f64) * 2.0 * PI;
             V2D {
                 x: r * theta.cos(),
                 y: r * theta.sin(),

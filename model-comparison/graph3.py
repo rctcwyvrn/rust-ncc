@@ -23,49 +23,6 @@ rust_dat = rust_out["tsteps"]
 py_data_dict_per_cell = gen_data_dict_per_cell_int_steps(py_out)
 rust_data_dict_per_cell = gen_data_dict_per_cell_int_steps(rust_out)
 
-ALL_GROUP = gh.PlotDataGroup(py_data_dict_per_cell, rust_data_dict_per_cell,
-                             gh.ALL_LABELS, )
-
-POSITION_GROUP = \
-    gh.PlotDataGroup(
-        py_data_dict_per_cell,
-        rust_data_dict_per_cell,
-        ["poly"] + gh.EXTRA_POSITIONS,
-        ["poly", ["poly_x", "poly_y"], "centroid"]
-    )
-class PositionGroup(PlotDataGroup):
-    def __init__(self, py_data_dict, rust_data_dict, max_step):
-        self.labels = ["poly", "centroid"]
-        self.label_groups = self.labels
-        self.description = "polygon position related data"
-        super().__init__(py_data_dict, rust_data_dict, max_step)
-
-
-class RacActGroup(PlotDataGroup):
-    def __init__(self, py_data_dict, rust_data_dict, max_step):
-        self.labels = ["rgtp_forces", "rgtp_forces_uiv_proj", "rac_acts",
-                       "x_coas", "kgtps_rac", "coa_update"]
-        self.label_groups = [["rgtp_forces", "rgtp_forces_uiv_proj"],
-                             "rac_acts", "x_coas", "kgtps_rac", "coa_update"]
-        self.description = "Rac activity related data"
-        super().__init__(py_data_dict, rust_data_dict, max_step)
-
-
-class RacActConcGroup(PlotDataGroup):
-    def __init__(self, py_data_dict, rust_data_dict, max_step):
-        self.labels = ["conc_rac_acts", "rac_act_net_fluxes"]
-        self.label_groups = self.labels
-        self.description = "Rac activity concentration related data"
-        super().__init__(py_data_dict, rust_data_dict, max_step)
-
-
-class RacInactGroup(PlotDataGroup):
-    def __init__(self, py_data_dict, rust_data_dict, max_step):
-        self.labels = ["rac_inacts", "x_cils", "kdgtps_rac", "rho_acts"]
-        self.label_groups = [["rac_inacts", "rho_acts"], "x_cils", "kdgtps_rac"]
-        self.description = "Rac inactivity related data"
-        super().__init__(py_data_dict, rust_data_dict, max_step)
-
 
 def paint(delta_vertex_plot, delta_data_plot, delta_max_plot,
           delta_cell_plot, delta_data_group_plot):
@@ -126,26 +83,28 @@ def paint(delta_vertex_plot, delta_data_plot, delta_max_plot,
             dict_rust_dat = GROUP_RUST_DATA[m]
             if len(dict_rust_dat[label].shape) == 1:
                 ax.plot(
-                    dict_rust_dat[label][:PLOT_X_MAX],
+                    dict_rust_dat[label][:PLOT_X_MAX] - dict_py_dat[label][
+                                                        :PLOT_X_MAX],
                     color=color)
-                ax.plot(
-                    dict_py_dat[label][:PLOT_X_MAX],
-                    color=color,
-                    linestyle="dashed")
-                #ax.set_ylim(GROUP_YLIMS[label])
+                # ax.plot(
+                #     dict_py_dat[label][:PLOT_X_MAX],
+                #     color=color,
+                #     linestyle="dashed")
+                # ax.set_ylim(GROUP_YLIMS[label])
             else:
                 for n in range(16):
                     if n == vert or vert == "all":
                         ax.plot(dict_rust_dat[label][
-                                :PLOT_X_MAX, n],
+                                :PLOT_X_MAX, n] - dict_py_dat[label][
+                                                     :PLOT_X_MAX, n],
                                 color=color)
-                        ax.plot(dict_py_dat[label][
-                                :PLOT_X_MAX, n], color=color,
-                                linestyle="dashed")
+                        # ax.plot(dict_py_dat[label][
+                        #         :PLOT_X_MAX, n], color=color,
+                        #         linestyle="dashed")
                         print(label)
                         print(GROUP_YLIMS)
                         ylims = GROUP_YLIMS[label]
-                        #ax.set_ylim(ylims)
+                        # ax.set_ylim(ylims)
 
     # ax.set_xticks(np.arange(PLOT_X_MAX))
     # ax.grid(which="major", axis="x")

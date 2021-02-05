@@ -99,21 +99,29 @@ fn gen_default_raw_params(
     rng: &mut Pcg32,
     randomization: bool,
 ) -> RawParameters {
-    let rgtp_d = (Length(0.1_f32.sqrt()).micro().pow(2.0).g() / Time(1.0).g())
+    let rgtp_d = (Length(0.1_f64.sqrt()).micro().pow(2.0).g() / Time(1.0).g())
         .to_diffusion()
         .unwrap();
     let mut specific_rac = [false; NVERTS];
-    specific_rac.iter_mut().enumerate().for_each(|(i, x)| {
-        if i < 4 {
-            *x = true;
-        }
-    });
+    specific_rac
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, x)| match i {
+            15 | 0 | 1 => {
+                *x = true;
+            }
+            _ => {}
+        });
     let mut specific_rho = [false; NVERTS];
-    specific_rho.iter_mut().enumerate().for_each(|(i, x)| {
-        if 8 <= i && i < 12 {
-            *x = true;
-        }
-    });
+    specific_rho
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, x)| match i {
+            7 | 8 | 9 => {
+                *x = true;
+            }
+            _ => {}
+        });
     let init_rac = RgtpDistribution::generate(
         DistributionScheme {
             frac: 0.1,
@@ -177,7 +185,7 @@ fn gen_default_raw_params(
 /// See SI for justification.
 //TODO: put justification here.
 fn gen_default_vertex_viscosity(char_quants: &CharQuantities) -> Viscosity {
-    char_quants.eta.mul_number(2.9 / (NVERTS as f32))
+    char_quants.eta.mul_number(2.9 / (NVERTS as f64))
 }
 
 fn gen_default_phys_contact_dist() -> Length {
@@ -187,14 +195,14 @@ fn gen_default_phys_contact_dist() -> Length {
 #[allow(unused)]
 fn gen_default_adhesion_mag(
     char_quants: &CharQuantities,
-    multiplier: f32,
+    multiplier: f64,
 ) -> Force {
     // Warning: going above this value may result in weirdness!
     // Danger zone: (Length(1.0).micro().g() * Tinv(1.0).g()).mul_number(0.1)
     let max_cell_v = Length(3.0).micro().g() * Tinv(1.0 / 60.0).g();
     let eta = char_quants.eta.g();
     let f_adh = (eta * max_cell_v)
-        .mul_number(1.0 / (NVERTS as f32))
+        .mul_number(1.0 / (NVERTS as f64))
         .to_force()
         .expect(
             "Procedure for generating default force does \

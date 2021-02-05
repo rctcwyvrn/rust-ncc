@@ -63,67 +63,63 @@ def calculate_spring_edge_forces(
         this_cell_coords, stiffness_edge, rest_edge_len
 ):
     edge_vectors_to_plus = np.empty((16, 2), dtype=np.float64)
-    edge_vectors_to_minus = np.empty((16, 2), dtype=np.float64)
+    #edge_vectors_to_minus = np.empty((16, 2), dtype=np.float64)
 
     for i in range(16):
         i_plus_1 = (i + 1) % 16
         i_minus_1 = (i - 1) % 16
-        edge_vector_to_plus = \
-            geometry.calculate_vector_from_p1_to_p2_given_vectors(
-            this_cell_coords[i], this_cell_coords[i_plus_1])
-        edge_vector_to_minus = \
-            geometry.calculate_vector_from_p1_to_p2_given_vectors(
-            this_cell_coords[i], this_cell_coords[i_minus_1])
 
-        edge_vectors_to_plus[i, 0] = edge_vector_to_plus[0]
-        edge_vectors_to_plus[i, 1] = edge_vector_to_plus[1]
+        edge_vectors_to_plus[i] = \
+            this_cell_coords[i_plus_1] - this_cell_coords[i]
+        # edge_vectors_to_minus[i] = \
+        #     this_cell_coords[i_minus_1] - this_cell_coords[i]
 
-        edge_vectors_to_minus[i, 0] = edge_vector_to_minus[0]
-        edge_vectors_to_minus[i, 1] = edge_vector_to_minus[1]
+    plus_dirn_edge_length = np.linalg.norm(edge_vectors_to_plus, axis=1)
 
-    plus_dirn_edge_length = geometry.calculate_2D_vector_mags(
-        edge_vectors_to_plus)
-
-    minus_dirn_edge_length = geometry.calculate_2D_vector_mags(
-        edge_vectors_to_minus)
+    # minus_dirn_edge_length = np.linalg.norm(edge_vectors_to_minus, axis=1)
 
     edge_strains_plus = np.empty(16, dtype=np.float64)
-    edge_strains_minus = np.empty(16, dtype=np.float64)
+    # edge_strains_minus = np.empty(16, dtype=np.float64)
     local_average_strains = np.empty(16, dtype=np.float64)
 
     for i in range(16):
         edge_strain_plus = (
                                    plus_dirn_edge_length[i] - rest_edge_len
                            ) / rest_edge_len
-        edge_strain_minus = (
-                                    minus_dirn_edge_length[i] - rest_edge_len
-                            ) / rest_edge_len
+        # edge_strain_minus = (
+        #                             minus_dirn_edge_length[i] - rest_edge_len
+        #                     ) / rest_edge_len
 
         edge_strains_plus[i] = edge_strain_plus
-        edge_strains_minus[i] = edge_strain_minus
+        # edge_strains_minus[i] = edge_strain_minus
 
-        local_average_strains[i] = 0.5 * \
-                                   edge_strain_plus + 0.5 * edge_strain_minus
-
-    unit_edge_disp_vecs_plus = geometry.normalize_vectors(edge_vectors_to_plus)
-    unit_edge_disp_vecs_minus = geometry.normalize_vectors(
-        edge_vectors_to_minus)
+    edge_strains_minus = np.roll(edge_strains_plus, shift=1, axis=0)
+    local_average_strains = (edge_strains_plus + edge_strains_minus) * 0.5
+    unit_edge_disp_vecs_plus = edge_vectors_to_plus / plus_dirn_edge_length[
+                                                      :, np.newaxis]
+    # unit_edge_disp_vecs_minus = edge_vectors_to_minus / minus_dirn_edge_length[
+    #                                                   :, np.newaxis]
 
     edge_forces_plus_mags = np.zeros(16, dtype=np.float64)
-    edge_forces_minus_mags = np.zeros(16, dtype=np.float64)
+    # edge_forces_minus_mags = np.zeros(16, dtype=np.float64)
     for i in range(16):
         edge_forces_plus_mags[i] = edge_strains_plus[i] * stiffness_edge
-        edge_forces_minus_mags[i] = edge_strains_minus[i] * stiffness_edge
+        #edge_forces_minus_mags[i] = edge_strains_minus[i] * stiffness_edge
 
-    edge_forces_plus = geometry.multiply_vectors_by_scalars(
-        unit_edge_disp_vecs_plus, edge_forces_plus_mags)
+    edge_forces_plus = edge_forces_plus_mags[:, np.newaxis] * unit_edge_disp_vecs_plus
+    edge_forces_minus = -1.0 * np.roll(edge_forces_plus, shift=1, axis=0)
 
-    edge_forces_minus = geometry.multiply_vectors_by_scalars(
-        unit_edge_disp_vecs_minus, edge_forces_minus_mags
-    )
+    #edge_forces_minus = edge_forces_minus_mags[:, np.newaxis] *
+    # unit_edge_disp_vecs_minus
+
+    #norm_sum_edge_fs = np.linalg.norm(np.sum(
+    # edge_forces_plus, axis=0) +
+    #                                  np.sum(
+    #                                  edge_forces_minus, axis=0))
+    #print("norm_sum_edge_fs: {}".format(norm_sum_edge_fs))
 
     return local_average_strains, edge_forces_plus, edge_forces_minus, \
-           edge_strains_plus
+           edge_strains_plus, unit_edge_disp_vecs_plus, edge_vectors_to_plus
 
 
 # -----------------------------------------------------------------
@@ -215,7 +211,8 @@ def calculate_forces(
         uivs,
     )
 
-    local_strains, edge_forces_plus, edge_forces_minus, edge_strains = \
+    local_average_strains, edge_forces_plus, edge_forces_minus, \
+    edge_strains, uevs, edge_vecs_plus = \
         calculate_spring_edge_forces(
         this_cell_coords, stiffness_edge, rest_edge_len
     )
@@ -227,10 +224,11 @@ def calculate_forces(
         sum_forces,
         edge_forces_plus,
         edge_forces_minus,
+        uevs,
         rgtpase_mediated_forces,
         cyto_forces,
         edge_strains,
-        local_strains,
+        local_average_strains,
         uivs,
     )
 

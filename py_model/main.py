@@ -11,9 +11,9 @@ L3D = 10e-6
 K_MEM_ON = 0.02
 K_MEM_OFF = 0.15
 KGTP = 1e-4
-COA = 24.0
-CIL = 60.0
-INIT_RAC = np.array([0.1/4] * 4 + [0.0] * (16 - 4))
+COA = 0
+CIL = 0
+INIT_RAC = np.array([0.3 / 4.0] * 4 + [0.0] * (16 - 4))
 
 NUM_CELLS = 2
 BOX_WIDTH = 2
@@ -23,6 +23,14 @@ TIME_IN_SECS = TIME_IN_HOURS * 3600.0
 NUM_TSTEPS = int(TIME_IN_SECS / T)
 NVERTS = 16
 RAND_SCHEME = None
+
+
+def u(x):
+    if x > 0:
+        return 1.0
+    else:
+        return 0.0
+
 
 params = dict([
     ("16", NVERTS),
@@ -40,8 +48,8 @@ params = dict([
     ("kdgtp", KGTP),
     ("cil_mag", CIL),
     ("coa_mag", COA),
-    ("coa_los_penalty", 2.0),
-    ("coa_range", 220e-6),
+    ("coa_los_penalty", 2.0 * u(COA)),
+    ("coa_range", 220e-6 * u(COA)),
     ("close_zero_at", 1.5e-6),
     ("close_one_at", 0.5e-6),
     ("randomization", False),

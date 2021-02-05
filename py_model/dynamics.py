@@ -9,7 +9,7 @@ import hardio as fw
 import utilities as general_utilities
 import numba as nb
 import numpy as np
-
+import copy
 import chemistry
 import geometry
 import mechanics
@@ -28,6 +28,54 @@ def pack_state_array(
     ]
 
     return np.append(phase_var_array, ode_cellwide_phase_var_array)
+
+
+# -----------------------------------------------------------------------------------------
+def interpret_state_array(rac_act_ix, rac_inact_ix, rho_act_ix,
+                          rho_inact_ix, x_ix, y_ix, state_array):
+    phase_vars = state_array
+
+    rac_mem_active_start_ix = rac_act_ix * 16
+    rac_mem_active_end_ix = rac_mem_active_start_ix + 16
+
+    rac_acts = phase_vars[
+               rac_mem_active_start_ix:rac_mem_active_end_ix
+               ]
+
+    rac_mem_inactive_start_ix = rac_inact_ix * 16
+    rac_mem_inactive_end_ix = rac_mem_inactive_start_ix + 16
+
+    rac_inacts = phase_vars[
+                 rac_mem_inactive_start_ix:rac_mem_inactive_end_ix
+                 ]
+
+    rho_mem_active_start_ix = rho_act_ix * 16
+    rho_mem_active_end_ix = rho_mem_active_start_ix + 16
+
+    rho_acts = phase_vars[
+               rho_mem_active_start_ix:rho_mem_active_end_ix
+               ]
+
+    rho_mem_inactive_start_ix = rho_inact_ix * 16
+    rho_mem_inactive_end_ix = rho_mem_inactive_start_ix + 16
+
+    rho_inacts = phase_vars[
+                 rho_mem_inactive_start_ix:rho_mem_inactive_end_ix
+                 ]
+
+    x_start_ix = x_ix * 16
+    x_end_ix = x_start_ix + 16
+
+    x = phase_vars[x_start_ix:x_end_ix]
+
+    y_start_ix = y_ix * 16
+    y_end_ix = y_start_ix + 16
+
+    y = phase_vars[y_start_ix:y_end_ix]
+
+    poly = general_utilities.make_verts_array_given_xs_and_ys(x, y
+                                                              )
+    return rac_acts, rho_acts, rac_inacts, rho_inacts, poly
 
 
 # ----------------------------------------------------------------------------------------
@@ -68,7 +116,11 @@ def calculate_sum(num_elements, sequence):
 
 
 # ----------------------------------------------------------------------------------------
-def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix, writer):
+def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix,
+             tstep, rac_act_ix, rac_inact_ix,
+             rho_act_ix, rho_inact_ix,
+             x_ix, y_ix, writer):
+    talkative = False
     num_tpoint_pairs = tpoints.shape[0] - 1
     tpoint_pairs = np.zeros((num_tpoint_pairs, 2), dtype=np.float64)
     states = np.zeros(
@@ -79,19 +131,50 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix, writer):
     states[0] = current_state
 
     for i in range(num_tpoint_pairs):
-        j = 2 * i
-        tpoint_pairs[i] = tpoints[j:j + 2]
+        int_step = 2 * i
+        tpoint_pairs[i] = tpoints[int_step:int_step + 2]
 
     writer.confirm_int_steps_empty()
+    if talkative:
+        print("-----------------------------------")
+        print("tstep: {}, cell: {}".format(tstep, cell_ix))
     for i in range(tpoint_pairs.shape[0]):
         init_t, end_t = tpoint_pairs[i]
         current_state = states[i]
         dt = (end_t - init_t) / num_int_steps
 
-        for j in range(num_int_steps):
-            current_state = current_state + dt * f(writer,
-                                                   cell_ix, current_state,
-                                                   *args)
+        for int_step in range(num_int_steps):
+            if talkative:
+                print("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+")
+            _, _, _, _, init_poly \
+                = interpret_state_array(rac_act_ix, rac_inact_ix,
+                                        rho_act_ix, rho_inact_ix,
+                                        x_ix, y_ix, current_state)
+            if talkative:
+                print("init poly[0]: {}".format(init_poly[0]))
+                print("init poly[15]: {}".format(init_poly[15]))
+            deltas, sum_forces, edge_forces_plus, edge_forces_minus, \
+            rgtp_forces, cyto_forces, verts_before_ve, verts_after_ve = f(
+                talkative,
+                tstep, int_step, dt, writer, cell_ix, current_state, *args)
+            current_state = current_state + dt * deltas
+            _, _, _, _, final_poly = interpret_state_array(rac_act_ix,
+                                                           rac_inact_ix,
+                                                           rho_act_ix,
+                                                           rho_inact_ix,
+                                                           x_ix, y_ix,
+                                                           current_state)
+            if talkative:
+                print("actual Delta poly(0): {}".format(
+                    verts_before_ve[0] - init_poly[0]))
+                print("Delta poly after VE: {}".format(
+                    verts_after_ve[0] - init_poly[0]))
+                print("final poly[0]: {}".format(final_poly[0]))
+                print("actual Delta poly (15): {}".format(
+                    verts_before_ve[15] - init_poly[15]))
+                print("Delta poly after VE: {}".format(
+                    verts_after_ve[15] - init_poly[15]))
+                print("final poly[15]: {}".format(final_poly[15]))
 
         states[i + 1] = current_state
 
@@ -99,6 +182,10 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix, writer):
 
 
 def cell_dynamics(
+        talkative,
+        tstep,
+        int_step,
+        dt,
         writer,
         cell_ix,
         state_array,
@@ -166,9 +253,9 @@ def cell_dynamics(
     rho_mem_inactive_start_ix = rho_inact_ix * 16
     rho_mem_inactive_end_ix = rho_mem_inactive_start_ix + 16
 
-    rho_inact = phase_vars[
-                rho_mem_inactive_start_ix:rho_mem_inactive_end_ix
-                ]
+    rho_inacts = phase_vars[
+                 rho_mem_inactive_start_ix:rho_mem_inactive_end_ix
+                 ]
 
     x_start_ix = x_ix * 16
     x_end_ix = x_start_ix + 16
@@ -180,8 +267,8 @@ def cell_dynamics(
 
     y = phase_vars[y_start_ix:y_end_ix]
 
-    verts = general_utilities.make_verts_array_given_xs_and_ys(x, y
-                                                               )
+    poly = general_utilities.make_verts_array_given_xs_and_ys(x, y
+                                                              )
 
     rac_cyto = (
             1
@@ -191,13 +278,14 @@ def cell_dynamics(
     rho_cyto = (
             1
             - calculate_sum(16, rho_acts)
-            - calculate_sum(16, rho_inact)
+            - calculate_sum(16, rho_inacts)
     )
 
-    sum_forces, edge_forces_plus, edge_forces_minus, rgtp_forces, cyto_forces, \
+    sum_forces, edge_forces_plus, edge_forces_minus, uevs, rgtp_forces, \
+    cyto_forces, \
     edge_strains, local_strains, \
     uivs = mechanics.calculate_forces(
-        verts,
+        poly,
         rac_acts,
         rho_acts,
         rest_edge_len,
@@ -218,11 +306,10 @@ def cell_dynamics(
         if local_strain > 0:
             only_tensile_local_strains[i] = local_strain
 
-    edgeplus_lengths = geometry.calculate_edgeplus_lengths(verts)
+    edgeplus_lengths = geometry.calculate_edgeplus_lengths(poly)
     avg_edge_lengths = geometry.calculate_average_edge_length_around_nodes(
         edgeplus_lengths
     )
-
     conc_rac_acts = chemistry.calc_concs(rac_acts, avg_edge_lengths)
 
     kgtps_rac = chemistry.calculate_kgtp_rac(
@@ -266,7 +353,7 @@ def cell_dynamics(
     )
 
     conc_rac_inacts = chemistry.calc_concs(rac_inacts, avg_edge_lengths)
-    conc_rho_inact = chemistry.calc_concs(rho_inact, avg_edge_lengths)
+    conc_rho_inact = chemistry.calc_concs(rho_inacts, avg_edge_lengths)
 
     diffusion_rac_acts = chemistry.calculate_diffusion(
         conc_rac_acts,
@@ -305,47 +392,92 @@ def cell_dynamics(
     np.zeros(2, dtype=np.float64)
     np.zeros(2, dtype=np.float64)
 
-    for ni in range(16):
-        old_coord = verts[ni]
+    if talkative:
+        print("tstep: {}, int_step: {}".format(tstep, int_step))
+        print("eta: {}".format(vertex_eta))
+        print("1/eta: {}".format(1 / vertex_eta))
+        print("rgtp_forces[0]: {}".format(rgtp_forces[0]))
+        print("edge_forces[0]: {}".format(edge_forces_plus[0]))
+        print("edge_forces_minus[0]: {}".format(edge_forces_minus[0]))
+        print("cyto_forces[0]: {}".format(cyto_forces[0]))
+        print(
+            "rgtp_forces + cyto_forces + edge_forces + edge_forces_minus = {}".
+                format(rgtp_forces[0] + edge_forces_plus[0] +
+                       edge_forces_minus[0] + cyto_forces[0]))
+        print("sum_forces[0]: {}".format(sum_forces[0]))
+        print("rgtp_forces[15]: {}".format(rgtp_forces[15]))
+        print("edge_forces[15]: {}".format(edge_forces_plus[15]))
+        print("edge_forces_minus[15]: {}".format(edge_forces_minus[15]))
+        print("cyto_forces[15]: {}".format(cyto_forces[15]))
+        print(
+            "rgtp_forces + cyto_forces + edge_forces + edge_forces_minus = {}".
+                format(rgtp_forces[15] + edge_forces_plus[15] +
+                       edge_forces_minus[15] + cyto_forces[15]))
+        print("sum_forces[15]: {}".format(sum_forces[15]))
 
-        new_verts[ni][0] = old_coord[0] + sum_forces_x[ni] / vertex_eta
-        new_verts[ni][1] = old_coord[1] + sum_forces_y[ni] / vertex_eta
+    for ni in range(16):
+        old_coord = poly[ni]
+
+        new_verts[ni][0] = old_coord[0] + dt * sum_forces_x[ni] / vertex_eta
+        new_verts[ni][1] = old_coord[1] + dt * sum_forces_y[ni] / vertex_eta
+
+    if talkative:
+        print("delta.poly[0]: {}".format((new_verts[0] - poly[0]) / dt))
+        print("expected Delta poly 0: {}".format(dt * sum_forces[0] / 
+                                                vertex_eta))
+        print("delta.poly[15]: {}".format((new_verts[15] - poly[15]) / dt))
+        print("expected Delta poly 15: {}".format(dt * sum_forces[15] /
+                                                 vertex_eta))
+
+    verts_before_ve = copy.deepcopy(new_verts)
 
     # calculate volume exclusion effects
-    num_bisection_iterations = 2
-    max_movement_mag = const_protrusive / vertex_eta
-    success_condition_stay_out = 0
+    num_bisection_iterations = 10
+    max_movement_mag = dt * const_protrusive / vertex_eta
 
     for other_ci in range(num_cells):
         if other_ci != cell_ix:
+            if talkative:
+                print("testing poly: {}".format(other_ci))
+                print("coords: {}".format(all_cells_verts[other_ci]))
+                print("max movement mag: {}".format(max_movement_mag))
             are_new_nodes_inside_other_cell = \
                 geometry.are_points_inside_polygon(
-                new_verts, all_cells_verts[other_ci]
+                    new_verts, all_cells_verts[other_ci], talkative=False
+                )
+            print("in poly: {}".format(
+                [i for (i, x) in
+                 enumerate(are_new_nodes_inside_other_cell) if x])
             )
-
             for ni in range(16):
-                if are_new_nodes_inside_other_cell[ni] != \
-                        success_condition_stay_out:
-                    new_verts[ni] = determine_volume_exclusion_effects(
-                        verts[ni],
+                if are_new_nodes_inside_other_cell[ni]:
+                    if talkative:
+                        print("fixing vertex {} violation (current: {})".format(
+                            ni, new_verts[ni]))
+                    new_verts[ni] = enforce_volume_exclusion_for_vertex(
+                        talkative,
+                        poly[ni],
                         new_verts[ni],
                         uivs[ni],
                         all_cells_verts[other_ci],
                         num_bisection_iterations,
                         max_movement_mag,
-                        success_condition_stay_out,
                     )
+    verts_after_ve = copy.deepcopy(new_verts)
 
-    poly_area = geometry.calculate_polygon_area(verts)
-    data = [("poly", [[float(v) for v in x] for x in verts]),
+    poly_area = geometry.calculate_polygon_area(poly)
+    data = [("poly", [[float(v) for v in x] for x in new_verts]),
             ("rac_acts", [float(v) for v in rac_acts]),
             ("rac_inacts", [float(v) for v in rac_inacts]),
             ("rho_acts", [float(v) for v in rho_acts]),
-            ("rho_inacts", [float(v) for v in rho_inact]),
-            ("sum_forces", [list([float(x), float(y)]) for x, y in zip(sum_forces_x, sum_forces_y)]),
+            ("rho_inacts", [float(v) for v in rho_inacts]),
+            ("sum_forces", [list([float(x), float(y)]) for x, y in
+                            zip(sum_forces_x, sum_forces_y)]),
             ("uivs", [[float(v) for v in x] for x in uivs]),
             ("rgtp_forces", [[float(v) for v in x] for x in rgtp_forces]),
             ("edge_forces", [[float(v) for v in x] for x in edge_forces_plus]),
+            ("edge_forces_minus",
+             [[float(v) for v in x] for x in edge_forces_minus]),
             ("cyto_forces", [[float(v) for v in x] for x in cyto_forces]),
             ("kgtps_rac", [float(v) for v in kgtps_rac]),
             ("kdgtps_rac", [float(v) for v in kdgtps_rac]),
@@ -356,6 +488,7 @@ def cell_dynamics(
             ("x_coas", [float(v) for v in x_coas]),
             ("rac_act_net_fluxes", [float(v) for v in diffusion_rac_acts]),
             ("edge_strains", [float(v) for v in edge_strains]),
+            ("uevs", [[float(v) for v in x] for x in uevs]),
             ("poly_area", poly_area), ("coa_update",
                                        [bool(v) for v in coa_update]),
             ("cil_update", [bool(v) for v in cil_update])]
@@ -365,10 +498,10 @@ def cell_dynamics(
 
     for ni in range(16):
         new_coord = new_verts[ni]
-        old_coord = verts[ni]
+        old_coord = poly[ni]
 
-        delta_x[ni] = new_coord[0] - old_coord[0]
-        delta_y[ni] = new_coord[1] - old_coord[1]
+        delta_x[ni] = (new_coord[0] - old_coord[0]) / dt
+        delta_y[ni] = (new_coord[1] - old_coord[1]) / dt
 
     for ni in range(16):
         # finish assigning chemistry variables
@@ -379,11 +512,11 @@ def cell_dynamics(
         delta_rac_off = k_mem_off * rac_inacts[ni]
         delta_rac_cytosol_to_membrane[ni] = delta_rac_on - delta_rac_off
 
-        delta_rho_activated[ni] = kgtps_rho[ni] * rho_inact[ni]
+        delta_rho_activated[ni] = kgtps_rho[ni] * rho_inacts[ni]
         delta_rho_inactivated[ni] = kdgtps_rho[ni] * rho_acts[ni]
 
         delta_rho_on = k_mem_on_vertex * rho_cyto
-        delta_rho_off = k_mem_off * rho_inact[ni]
+        delta_rho_off = k_mem_off * rho_inacts[ni]
         delta_rho_cytosol_to_membrane[ni] = delta_rho_on - delta_rho_off
 
     # set up ode array
@@ -420,60 +553,68 @@ def cell_dynamics(
 
         ode_array[i + 5 * 16] = delta_y[i]
 
-    return ode_array
+    return ode_array, sum_forces, edge_forces_plus, edge_forces_minus, \
+           rgtp_forces, cyto_forces, verts_before_ve, verts_after_ve
 
 
 # -----------------------------------------------------------------
-@nb.jit(nopython=True)
-def determine_volume_exclusion_effects(
+def enforce_volume_exclusion_for_vertex(
+        talkative,
         old_coord,
         new_coord,
         unit_inside_pointing_vector,
         polygon,
         num_bisection_iterations,
         max_movement_mag,
-        success_exclusion_condition,
 ):
-    #    if success_exclusion_condition == 1:
-    #        movement_mag = geometry.calculate_2D_vector_mag(old_coord -
-    #        new_coord)
-    #        return old_coord + movement_mag*unit_inside_pointing_vector
+    # min_x, max_x, min_y, max_y = geometry.calculate_polygon_bb(
+    #     polygon)
 
-    min_x, max_x, min_y, max_y = geometry.calculate_polygon_bb(
-        polygon)
-
-    old_coord_status = geometry.is_point_in_polygon_given_bb(
-        old_coord, polygon, min_x, max_x, min_y, max_y
+    is_old_in_poly = geometry.is_point_in_polygon_without_bb_check(
+        old_coord, polygon, talkative=False
     )
 
-    # we know that the new coord is not in the polygon, now, so we test the
-    # old_coord
-    if old_coord_status != success_exclusion_condition:
-        while old_coord_status != success_exclusion_condition:
-            old_coord = old_coord + max_movement_mag * \
-                        unit_inside_pointing_vector
-            # num_bisection_iterations = int(num_bisection_iterations*1.5)
-            old_coord_status = geometry.is_point_in_polygon_given_bb(
-                old_coord, polygon, min_x, max_x, min_y, max_y
+    while is_old_in_poly:
+        old_coord = old_coord + max_movement_mag * \
+                    unit_inside_pointing_vector
+        if talkative:
+            print(
+                "trial old v: {}".format(old_coord)
             )
+        # num_bisection_iterations = int(num_bisection_iterations*1.5)
+        is_old_in_poly = geometry.is_point_in_polygon_without_bb_check(
+            old_coord, polygon, talkative=False)
 
     # if we have reached here, then we know that the old_coord is in the
     # polygon, and the new coord is not in the polygon
-    a = old_coord
-    b = new_coord
+    ok_coord = old_coord
+    if talkative:
+        print("settling with okay v: {} (in poly: {})".format(old_coord,
+                                                              geometry.is_point_in_polygon_without_bb_check(
+                                                                  old_coord,
+                                                                  polygon,
+                                                                  talkative=False)))
+    problem_coord = new_coord
     np.zeros(2, dtype=np.float64)
 
+    if talkative:
+        print("problem v: {}".format(problem_coord))
     for i in range(num_bisection_iterations):
-        test_coord = 0.5 * (a + b)
+        test_coord = 0.5 * (ok_coord + problem_coord)
+        if talkative:
+            print("testing: {}".format(test_coord))
 
-        if (
-                geometry.is_point_in_polygon_given_bb(
-                    test_coord, polygon, min_x, max_x, min_y, max_y
-                )
-                == success_exclusion_condition
+        if geometry.is_point_in_polygon_without_bb_check(
+                test_coord, polygon, talkative=False
         ):
-            a = test_coord
+            if talkative:
+                print("setting as problem")
+            problem_coord = test_coord
         else:
-            b = test_coord
+            if talkative:
+                print("setting as ok")
+            ok_coord = test_coord
 
-    return a
+    if talkative:
+        print("returning ok: {}".format(ok_coord))
+    return ok_coord

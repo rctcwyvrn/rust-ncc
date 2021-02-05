@@ -10,6 +10,7 @@ import parameters
 
 import hardio
 from hardio import Writer
+import chemistry
 
 """
 Environment of cells.s
@@ -86,12 +87,12 @@ class Environment:
             dtype=np.int64,
         )
 
-        environment_cells_verts = np.array(
+        env_cells_verts = np.array(
             [x.curr_verts for x in self.env_cells]
         )
         cells_bb_array = \
             geometry.calc_init_cell_bbs(
-                self.num_cells, environment_cells_verts)
+                self.num_cells, env_cells_verts)
         (
             cells_node_distance_matrix,
             cells_line_segment_intersection_matrix,
@@ -99,12 +100,35 @@ class Environment:
             self.num_cells,
             16,
             cells_bb_array,
-            environment_cells_verts,
+            env_cells_verts,
         )
+        self.x_cils_per_cell = []
+        self.x_coas_per_cell = []
+        self.update_coa_cil(env_cells_verts,
+                            cells_node_distance_matrix,
+                            cells_line_segment_intersection_matrix)
         for (ci, cell) in enumerate(self.env_cells):
-            cell.initialize_cell(cells_node_distance_matrix[ci],
-                                 cells_line_segment_intersection_matrix[ci],
-                                 environment_cells_verts)
+            are_nodes_inside_other_cells = \
+                geometry.check_if_nodes_inside_other_cells(
+                    cell.cell_ix, 16, self.num_cells,
+                    env_cells_verts)
+
+            close_point_on_other_cells_to_each_node_exists, \
+            close_point_on_other_cells_to_each_node, \
+            close_point_on_other_cells_to_each_node_indices, \
+            close_point_on_other_cells_to_each_node_projection_factors, \
+            close_point_smoothness_factors = \
+                geometry.do_close_points_to_each_node_on_other_cells_exist(
+                    cell.num_cells, 16, cell.cell_ix,
+                    env_cells_verts[cell.cell_ix],
+                    cells_node_distance_matrix[ci],
+                    cell.close_zero_at,
+                    cell.close_one_at,
+                    env_cells_verts, are_nodes_inside_other_cells)
+
+            cell.initialize_cell(close_point_smoothness_factors,
+                                 self.x_cils_per_cell[ci],
+                                 self.x_coas_per_cell[ci])
 
         self.mode = MODE_EXECUTE
         self.animation_settings = None
@@ -265,7 +289,7 @@ class Environment:
             cells_node_distance_matrix,
             cells_bb_array,
             cells_line_segment_intersection_matrix,
-            environment_cells_verts,
+            env_cells_verts,
             environment_cells,
     ):
         execution_sequence = self.cell_indices
@@ -275,39 +299,102 @@ class Environment:
 
         for ci in execution_sequence:
             current_cell = environment_cells[ci]
+            x_cils = self.x_cils_per_cell[ci]
+            x_coas = self.x_coas_per_cell[ci]
+
+            are_nodes_inside_other_cells = \
+                geometry.check_if_nodes_inside_other_cells(
+                    current_cell.cell_ix, 16, self.num_cells,
+                    env_cells_verts)
+
+            close_point_on_other_cells_to_each_node_exists, \
+            close_point_on_other_cells_to_each_node, \
+            close_point_on_other_cells_to_each_node_indices, \
+            close_point_on_other_cells_to_each_node_projection_factors, \
+            close_point_smoothness_factors = \
+                geometry.do_close_points_to_each_node_on_other_cells_exist(
+                    current_cell.num_cells, 16, current_cell.cell_ix,
+                    env_cells_verts[current_cell.cell_ix],
+                    cells_node_distance_matrix[ci],
+                    current_cell.close_zero_at,
+                    current_cell.close_one_at,
+                    env_cells_verts, are_nodes_inside_other_cells)
 
             current_cell.execute_step(
                 ci,
-                environment_cells_verts,
-                cells_node_distance_matrix[ci],
-                cells_line_segment_intersection_matrix[ci],
+                env_cells_verts,
+                close_point_smoothness_factors,
+                x_cils,
+                x_coas,
                 self.writer,
             )
 
             this_cell_coords = current_cell.curr_verts
 
-            environment_cells_verts[ci] = this_cell_coords
+            env_cells_verts[ci] = this_cell_coords
 
             cells_bb_array[ci] = \
                 geometry.calculate_polygon_bb(this_cell_coords)
             geometry.update_line_segment_intersection_and_dist_squared_matrices(
                 4,
                 self.geometry_tasks_per_cell[ci],
-                environment_cells_verts,
+                env_cells_verts,
                 cells_bb_array,
                 cells_node_distance_matrix,
                 cells_line_segment_intersection_matrix,
                 sequential=True,
             )
 
+        self.update_coa_cil(env_cells_verts, cells_node_distance_matrix,
+                            cells_line_segment_intersection_matrix)
+
         return (
             cells_node_distance_matrix,
             cells_bb_array,
             cells_line_segment_intersection_matrix,
-            environment_cells_verts,
+            env_cells_verts,
         )
 
     # -----------------------------------------------------------------
+
+    def update_coa_cil(self, env_cells_verts, cells_node_distance_matrix,
+                       cells_line_segment_intersection_matrix):
+        self.x_cils_per_cell = []
+        self.x_coas_per_cell = []
+        for ci in range(self.num_cells):
+            cell = self.env_cells[ci]
+            x_coas = chemistry.calculate_x_coas(
+                self.num_cells,
+                ci,
+                cell.coa_distrib_exp,
+                cell.coa_mag,
+                cells_node_distance_matrix[ci],
+                cells_line_segment_intersection_matrix[ci],
+                cell.coa_los_penalty,
+            )
+
+            are_nodes_inside_other_cells = \
+                geometry.check_if_nodes_inside_other_cells(
+                    cell.cell_ix, 16, self.num_cells,
+                    env_cells_verts)
+
+            close_point_on_other_cells_to_each_node_exists, \
+            close_point_on_other_cells_to_each_node, \
+            close_point_on_other_cells_to_each_node_indices, \
+            close_point_on_other_cells_to_each_node_projection_factors, \
+            close_point_smoothness_factors = \
+                geometry.do_close_points_to_each_node_on_other_cells_exist(
+                    cell.num_cells, 16, cell.cell_ix,
+                    env_cells_verts[cell.cell_ix],
+                    cells_node_distance_matrix[ci],
+                    cell.close_zero_at,
+                    cell.close_one_at,
+                    env_cells_verts, are_nodes_inside_other_cells)
+            x_cils = chemistry.calc_x_cils(cell.cell_ix, cell.num_cells,
+                                           cell.cil_mag,
+                                           close_point_smoothness_factors)
+            self.x_coas_per_cell.append(x_coas)
+            self.x_cils_per_cell.append(x_cils)
 
     def execute_system_dynamics(
             self,
