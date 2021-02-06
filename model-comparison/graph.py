@@ -28,18 +28,18 @@ def paint(delta_vertex_plot, delta_data_plot, delta_max_plot,
           delta_cell_plot, delta_data_group_plot):
     global fig
     global ax
-    global VERTEX_IX
-    global CURR_DATA_IX
+    global VERT_PLOT_IX
+    global CURR_INNER_IX
     global PLOT_X_MAX
     global DATA_GROUP_IX
-    global CELL_IX
+    global CELL_PLOT_IX
     global NUM_CELLS
     global DATA_GROUPS
-    global CURR_DATA_GROUP
-    global GROUP_DATA_IX_MAX
-    global GROUP_LABELS
-    global GROUP_COLORS
-    global GROUP_YLIMS
+    global ACTIVE_DG
+    global NUM_LABEL_GROUPS
+    global LABEL_GROUPS
+    global DG_COLORS
+    global DG_YLIMS
     global GROUP_PY_DATA
     global GROUP_RUST_DATA
     global GROUP_DESCRIPT
@@ -111,11 +111,11 @@ def paint(delta_vertex_plot, delta_data_plot, delta_max_plot,
 
 
 def on_press(event):
-    global VERTEX_IX
-    global CURR_DATA_IX
+    global VERT_PLOT_IX
+    global CURR_INNER_IX
     global PLOT_X_MAX
     global DATA_GROUP_IX
-    global CELL_IX
+    global CELL_PLOT_IX
     global fig
     print("pressed: {}".format(event.key))
     if event.key == "up":
@@ -152,22 +152,22 @@ def on_press(event):
 PLOT_X_MAX = NUM_TSTEPS
 VERTEX_PLOT_TYPE = [n for n in range(16)] + ["all"]
 CELL_PLOT_TYPE = [m for m in range(NUM_CELLS)] + ["all"]
-VERTEX_IX = 0
-CELL_IX = 0
+VERT_PLOT_IX = 0
+CELL_PLOT_IX = 0
 
 py_data_dict_per_cell, rust_data_dict_per_cell, DATA_GROUPS = \
     gh.generate_groups(
         py_data_dict_per_cell, rust_data_dict_per_cell, PLOT_X_MAX)
 DATA_GROUP_IX = 0
-CURR_DATA_GROUP = DATA_GROUPS[DATA_GROUP_IX]
-GROUP_DATA_IX_MAX = len(CURR_DATA_GROUP.labels)
-GROUP_LABELS = CURR_DATA_GROUP.labels
-GROUP_COLORS = [gh.LABEL_COLOR_DICT[label] for label in GROUP_LABELS]
-GROUP_YLIMS = CURR_DATA_GROUP.grouped_ylims_dict
-GROUP_PY_DATA = CURR_DATA_GROUP.py_dat
-GROUP_RUST_DATA = CURR_DATA_GROUP.rust_dat
+ACTIVE_DG = DATA_GROUPS[DATA_GROUP_IX]
+NUM_LABEL_GROUPS = len(ACTIVE_DG.labels)
+LABEL_GROUPS = ACTIVE_DG.labels
+DG_COLORS = [gh.LABEL_COLOR_DICT[label] for label in LABEL_GROUPS]
+DG_YLIMS = ACTIVE_DG.grouped_ylims_dict
+GROUP_PY_DATA = ACTIVE_DG.py_dat
+GROUP_RUST_DATA = ACTIVE_DG.rust_dat
 GROUP_DESCRIPT = DATA_GROUPS[DATA_GROUP_IX].description
-CURR_DATA_IX = 0
+CURR_INNER_IX = 0
 
 fig, ax = plt.subplots()
 paint(0, 0, 0, 0, 0)

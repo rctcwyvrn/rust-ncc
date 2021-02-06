@@ -120,7 +120,9 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix,
              tstep, rac_act_ix, rac_inact_ix,
              rho_act_ix, rho_inact_ix,
              x_ix, y_ix, writer):
-    talkative = False
+    talkative = True
+    focus_verts = [0, 15]
+    
     num_tpoint_pairs = tpoints.shape[0] - 1
     tpoint_pairs = np.zeros((num_tpoint_pairs, 2), dtype=np.float64)
     states = np.zeros(
@@ -151,11 +153,11 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix,
                                         rho_act_ix, rho_inact_ix,
                                         x_ix, y_ix, current_state)
             if talkative:
-                print("init poly[0]: {}".format(init_poly[0]))
-                print("init poly[15]: {}".format(init_poly[15]))
+                for ix in focus_verts:
+                    print("init poly[{}]: {}".format(ix, init_poly[ix]))
             deltas, sum_forces, edge_forces_plus, edge_forces_minus, \
             rgtp_forces, cyto_forces, verts_before_ve, verts_after_ve = f(
-                talkative,
+                talkative, focus_verts,
                 tstep, int_step, dt, writer, cell_ix, current_state, *args)
             current_state = current_state + dt * deltas
             _, _, _, _, final_poly = interpret_state_array(rac_act_ix,
@@ -165,16 +167,16 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix,
                                                            x_ix, y_ix,
                                                            current_state)
             if talkative:
-                print("actual Delta poly(0): {}".format(
-                    verts_before_ve[0] - init_poly[0]))
-                print("Delta poly after VE: {}".format(
-                    verts_after_ve[0] - init_poly[0]))
-                print("final poly[0]: {}".format(final_poly[0]))
-                print("actual Delta poly (15): {}".format(
-                    verts_before_ve[15] - init_poly[15]))
-                print("Delta poly after VE: {}".format(
-                    verts_after_ve[15] - init_poly[15]))
-                print("final poly[15]: {}".format(final_poly[15]))
+                for ix in focus_verts:
+                    print("actual Delta poly({}): {}".format(ix,
+                                                             verts_before_ve[
+                                                                 ix] -
+                                                             init_poly[ix]))
+                    print("Delta poly after VE({}): {}".format(ix,
+                                                               verts_after_ve[
+                                                                   ix] -
+                                                               init_poly[ix]))
+                    print("final poly[{}]: {}".format(ix, final_poly[0]))
 
         states[i + 1] = current_state
 
@@ -183,6 +185,7 @@ def eulerint(f, current_state, tpoints, args, num_int_steps, cell_ix,
 
 def cell_dynamics(
         talkative,
+        focus_verts,
         tstep,
         int_step,
         dt,
@@ -396,24 +399,18 @@ def cell_dynamics(
         print("tstep: {}, int_step: {}".format(tstep, int_step))
         print("eta: {}".format(vertex_eta))
         print("1/eta: {}".format(1 / vertex_eta))
-        print("rgtp_forces[0]: {}".format(rgtp_forces[0]))
-        print("edge_forces[0]: {}".format(edge_forces_plus[0]))
-        print("edge_forces_minus[0]: {}".format(edge_forces_minus[0]))
-        print("cyto_forces[0]: {}".format(cyto_forces[0]))
-        print(
-            "rgtp_forces + cyto_forces + edge_forces + edge_forces_minus = {}".
-                format(rgtp_forces[0] + edge_forces_plus[0] +
-                       edge_forces_minus[0] + cyto_forces[0]))
-        print("sum_forces[0]: {}".format(sum_forces[0]))
-        print("rgtp_forces[15]: {}".format(rgtp_forces[15]))
-        print("edge_forces[15]: {}".format(edge_forces_plus[15]))
-        print("edge_forces_minus[15]: {}".format(edge_forces_minus[15]))
-        print("cyto_forces[15]: {}".format(cyto_forces[15]))
-        print(
-            "rgtp_forces + cyto_forces + edge_forces + edge_forces_minus = {}".
-                format(rgtp_forces[15] + edge_forces_plus[15] +
-                       edge_forces_minus[15] + cyto_forces[15]))
-        print("sum_forces[15]: {}".format(sum_forces[15]))
+        for ix in focus_verts:
+            print("rgtp_forces[{}]: {}".format(ix, rgtp_forces[ix]))
+            print("edge_forces[{}]: {}".format(ix, edge_forces_plus[ix]))
+            print("edge_forces_minus[{}]: {}".format(ix, edge_forces_minus[ix]))
+            print("cyto_forces[{}]: {}".format(ix, cyto_forces[ix]))
+            print(
+                "expected sum forces ({}) = {}".format(ix,
+                                                       rgtp_forces[ix] +
+                                                       edge_forces_plus[ix] +
+                                                       edge_forces_minus[ix] +
+                                                       cyto_forces[ix]))
+            print("sum_forces[{}]: {}".format(ix, sum_forces[ix]))
 
     for ni in range(16):
         old_coord = poly[ni]
@@ -422,12 +419,11 @@ def cell_dynamics(
         new_verts[ni][1] = old_coord[1] + dt * sum_forces_y[ni] / vertex_eta
 
     if talkative:
-        print("delta.poly[0]: {}".format((new_verts[0] - poly[0]) / dt))
-        print("expected Delta poly 0: {}".format(dt * sum_forces[0] / 
-                                                vertex_eta))
-        print("delta.poly[15]: {}".format((new_verts[15] - poly[15]) / dt))
-        print("expected Delta poly 15: {}".format(dt * sum_forces[15] /
-                                                 vertex_eta))
+        for ix in focus_verts:
+            print("delta.poly[{}]: {}".format(ix, (new_verts[0] - poly[0]) /
+                                              dt))
+            print("expected Delta poly 0 ({}): {}".format(ix, dt * sum_forces[
+                0] / vertex_eta))
 
     verts_before_ve = copy.deepcopy(new_verts)
 
@@ -445,10 +441,11 @@ def cell_dynamics(
                 geometry.are_points_inside_polygon(
                     new_verts, all_cells_verts[other_ci], talkative=False
                 )
-            print("in poly: {}".format(
-                [i for (i, x) in
-                 enumerate(are_new_nodes_inside_other_cell) if x])
-            )
+            if talkative:
+                print("in poly: {}".format(
+                    [i for (i, x) in
+                     enumerate(are_new_nodes_inside_other_cell) if x])
+                )
             for ni in range(16):
                 if are_new_nodes_inside_other_cell[ni]:
                     if talkative:

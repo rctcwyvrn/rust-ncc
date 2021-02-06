@@ -590,8 +590,8 @@ impl CoreState {
                 );
                 print!("cyto_forces[{}]: {}\n", i, mech_state.cyto_forces[i]);
                 print!(
-                    "rgtp_forces + cyto_forces + edge_forces + \
-                edge_forces_minus = {}\n",
+                    "expected sum forces({}) = {}\n",
+                    i,
                     mech_state.rgtp_forces[i]
                         + mech_state.edge_forces[i]
                         + mech_state.edge_forces_minus[i]
