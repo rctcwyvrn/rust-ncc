@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::math::radians::{arctan, Radians};
+use crate::math::radians::Radians;
 use crate::math::{close_to_zero, max_f64, min_f64};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -32,7 +32,7 @@ impl V2D {
 
     /// Calculate direction of vector from origin to point in radians.
     pub fn direction(&self) -> Radians {
-        arctan(self.x, self.y)
+        Radians::from(self.y.atan2(self.x))
     }
 
     /// Calculate magnitude of vector from origin to point.

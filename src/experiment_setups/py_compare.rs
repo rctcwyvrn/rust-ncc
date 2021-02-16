@@ -1,8 +1,3 @@
-use crate::experiments::{
-    gen_default_char_quants, gen_default_phys_contact_dist,
-    gen_default_raw_params, gen_default_vertex_viscosity, CellGroup,
-    Experiment, GroupBBox,
-};
 use crate::math::v2d::V2D;
 use crate::parameters::quantity::{Length, Quantity};
 use crate::parameters::{
@@ -15,6 +10,7 @@ use crate::utils::pcg32::Pcg32;
 use crate::cell::chemistry::{
     DistributionScheme, DistributionType, RgtpDistribution,
 };
+use crate::experiment_setups::{CellGroup, Experiment, GroupBBox};
 use crate::NVERTS;
 use rand::SeedableRng;
 
@@ -92,7 +88,7 @@ fn gen_raw_params(
     )
     .unwrap();
 
-    let mut raw_params = gen_default_raw_params(rng, randomization);
+    let mut raw_params = defaults::RAW_PARAMS;
     raw_params.modify_init_rac(init_rac);
     raw_params.modify_init_rho(init_rho);
 
@@ -119,7 +115,7 @@ fn cell_groups(
                         rng,
                         randomization,
                     )
-                    .gen_parameters(cq),
+                    .refine(cq),
                 })
             } else {
                 None
@@ -135,12 +131,13 @@ fn raw_world_parameters(
     coa_mag: Option<f64>,
     cil_mag: f64,
 ) -> RawWorldParameters {
+    let raw_world_parameters = *default::RAW_WORLD_PARAMS;
     // Some(RawCoaParams {
     //     los_penalty: 2.0,
     //     range: Length(100.0).micro(),
     //     mag: 100.0,
     // })
-    let one_at = gen_default_phys_contact_dist();
+    let one_at = default::physical_close_dist();
     // Some(RawCoaParams {
     //                 los_penalty: 2.0,
     //                 range: Length(220.0).micro(),

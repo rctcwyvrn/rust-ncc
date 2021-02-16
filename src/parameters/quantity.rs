@@ -186,7 +186,7 @@ impl Div for Units {
 pub trait Quantity {
     /// Return a quantity that whose number part is a multiple
     /// of this quantity.
-    fn mul_number(&self, multiple: f64) -> Self;
+    fn scale(&self, multiple: f64) -> Self;
 
     /// Return a quantity that is `10^-3` times the original.
     fn kilo(&self) -> Self;
@@ -259,7 +259,7 @@ impl General {
 }
 
 impl Quantity for General {
-    fn mul_number(&self, multiplier: f64) -> Self {
+    fn scale(&self, multiplier: f64) -> Self {
         General {
             n: self.n * multiplier,
             u: self.u,
@@ -267,15 +267,15 @@ impl Quantity for General {
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -332,20 +332,20 @@ impl Display for General {
 pub struct Force(pub f64);
 
 impl Quantity for Force {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Force(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -374,20 +374,20 @@ impl Quantity for Force {
 pub struct Length(pub f64);
 
 impl Quantity for Length {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Length(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -416,20 +416,20 @@ impl Quantity for Length {
 pub struct Time(pub f64);
 
 impl Quantity for Time {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Time(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -458,20 +458,20 @@ impl Quantity for Time {
 pub struct Tinv(pub f64);
 
 impl Quantity for Tinv {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Tinv(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -500,20 +500,20 @@ impl Quantity for Tinv {
 pub struct Diffusion(pub f64);
 
 impl Quantity for Diffusion {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Diffusion(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -542,20 +542,20 @@ impl Quantity for Diffusion {
 pub struct Stress(pub f64);
 
 impl Quantity for Stress {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Stress(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -584,20 +584,20 @@ impl Quantity for Stress {
 pub struct Viscosity(pub f64);
 
 impl Quantity for Viscosity {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Viscosity(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Viscosity {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {
@@ -624,20 +624,20 @@ impl Quantity for Viscosity {
 pub struct Unitless(pub f64);
 
 impl Quantity for Unitless {
-    fn mul_number(&self, other: f64) -> Self {
+    fn scale(&self, other: f64) -> Self {
         Unitless(self.0 * other)
     }
 
     fn kilo(&self) -> Self {
-        self.mul_number(1e3)
+        self.scale(1e3)
     }
 
     fn micro(&self) -> Self {
-        self.mul_number(1e-6)
+        self.scale(1e-6)
     }
 
     fn nano(&self) -> Self {
-        self.mul_number(1e-9)
+        self.scale(1e-9)
     }
 
     fn number(&self) -> f64 {

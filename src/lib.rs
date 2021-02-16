@@ -1,5 +1,5 @@
 pub mod cell;
-pub mod experiments;
+pub mod experiment_setups;
 pub mod hardio;
 pub mod interactions;
 pub mod math;

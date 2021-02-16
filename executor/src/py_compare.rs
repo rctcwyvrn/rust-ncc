@@ -1,9 +1,8 @@
-//! The entry point.
-use rust_ncc::{experiments, world};
+use rust_ncc::{experiment_setups, world};
 use std::time::Instant;
 
-fn main() {
-    let exp = experiments::model_compare::generate(
+fn py_compare() {
+    let exp = experiment_setups::py_compare::generate(
         Some(3),
         vec![1, 1],
         false,

@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use rust_ncc::{experiments, world};
+use rust_ncc::{experiment_setups, world};
 use std::time::Duration;
 
 fn n_cells() {
-    let exp = experiments::n_cells::generate(Some(123829), 9);
+    let exp = experiment_setups::n_cells::generate(Some(123829), 9);
     let mut w = world::World::new(exp, None, 10, 100);
     w.simulate(3.0 * 3600.0, false);
 }

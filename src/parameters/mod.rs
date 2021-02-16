@@ -49,7 +49,14 @@ impl CharQuantities {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Modify,
 )]
 pub struct RawCloseBounds {
     pub zero_at: Length,
@@ -62,7 +69,9 @@ impl RawCloseBounds {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(
+    Clone, Debug, Default, Deserialize, Serialize, PartialEq, Modify,
+)]
 pub struct RawPhysicalContactParams {
     pub range: RawCloseBounds,
     pub adh_mag: Option<Force>,
@@ -90,7 +99,14 @@ impl RawPhysicalContactParams {
 }
 
 #[derive(
-    Deserialize, Serialize, Clone, Copy, PartialEq, Default, Debug,
+    Deserialize,
+    Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Default,
+    Debug,
+    Modify,
 )]
 pub struct RawCoaParams {
     /// Factor controlling to what extent line-of-sight blockage should be
@@ -183,7 +199,9 @@ impl RawBdryParams {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
+#[derive(
+    Deserialize, Serialize, Clone, PartialEq, Default, Debug, Modify,
+)]
 pub struct RawInteractionParams {
     pub coa: Option<RawCoaParams>,
     pub chem_attr: Option<RawChemAttrParams>,
@@ -205,7 +223,9 @@ impl RawInteractionParams {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
+#[derive(
+    Deserialize, Serialize, Clone, PartialEq, Default, Debug, Modify,
+)]
 pub struct RawWorldParameters {
     pub vertex_eta: Viscosity,
     pub interactions: RawInteractionParams,
@@ -442,25 +462,24 @@ pub struct Parameters {
 }
 
 impl RawParameters {
-    pub fn gen_parameters(&self, bq: &CharQuantities) -> Parameters {
-        let cell_r = self.cell_diam.mul_number(0.5);
-        let rel =
-            self.cell_diam.mul_number((PI / (NVERTS as f64)).sin());
+    pub fn refine(&self, bq: &CharQuantities) -> Parameters {
+        let cell_r = self.cell_diam.scale(0.5);
+        let rel = self.cell_diam.scale((PI / (NVERTS as f64)).sin());
         let ra = Length(1.0)
             .pow(2.0)
-            .mul_number(calc_init_cell_area(cell_r.number()));
+            .scale(calc_init_cell_area(cell_r.number()));
         let const_protrusive =
             (self.lm_h.g() * self.lm_ss.g() * rel.g())
-                .mul_number(self.halfmax_rgtp_max_f_frac);
+                .scale(self.halfmax_rgtp_max_f_frac);
         let const_retractive =
-            const_protrusive.mul_number(self.rho_friction);
+            const_protrusive.scale(self.rho_friction);
         let halfmax_vertex_rgtp =
             self.halfmax_rgtp_frac / NVERTS as f64;
         let halfmax_vertex_rgtp_conc =
-            rel.pow(-1.0).mul_number(halfmax_vertex_rgtp);
+            rel.pow(-1.0).scale(halfmax_vertex_rgtp);
         let stiffness_edge = self.stiffness_cortex.g() * bq.l3d.g();
         let stiffness_cyto =
-            self.stiffness_cyto.g().mul_number(1.0 / NVERTS as f64);
+            self.stiffness_cyto.g().scale(1.0 / NVERTS as f64);
 
         Parameters {
             cell_r: bq.normalize(&cell_r),

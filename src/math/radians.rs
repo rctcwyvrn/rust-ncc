@@ -1,28 +1,53 @@
 // Copyright © 2020 Brian Merchant.
 //
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// Licensed under the Apache License, Version 2.inner <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.inner> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
 use crate::math::modulo_f64;
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::f64::consts::PI;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Mul, Sub};
 
-/// Value always between `[0.0, 2*PI]`.
-#[derive(PartialOrd, PartialEq, Clone, Copy)]
-pub struct Radians(f64);
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
+pub struct Radians {
+    inner: f64,
+}
 
-const RAD_2PI: Radians = Radians(2.0 * PI);
-const RAD_EPS: Radians = Radians(1e-12);
+pub const RAD_2PI: Radians = Radians { inner: 2.0 * PI };
+pub const RAD_EPS: Radians = Radians { inner: 1e-4 * PI };
+
+impl From<f64> for Radians {
+    fn from(val: f64) -> Self {
+        Radians {
+            inner: modulo_f64(val, RAD_2PI.inner),
+        }
+    }
+}
+
+impl PartialEq for Radians {
+    fn eq(&self, other: &Self) -> bool {
+        (self.inner - other.inner).abs() < RAD_EPS.inner
+    }
+}
+
+impl PartialOrd for Radians {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Radians::from(self.inner)
+            .inner
+            .partial_cmp(&Radians::from(other.inner).inner)
+    }
+}
 
 /// Addition modulo `2*PI`.
 impl Add for Radians {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        Radians(modulo_f64(self.0 + other.0, RAD_2PI.0))
+        Radians::from(self.inner + other.inner)
     }
 }
 
@@ -31,7 +56,23 @@ impl Sub for Radians {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        Radians(modulo_f64(self.0 - other.0, RAD_2PI.0))
+        Radians::from(self.inner - other.inner)
+    }
+}
+
+impl Mul<f64> for Radians {
+    type Output = Radians;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Radians::from(self.inner * rhs)
+    }
+}
+
+impl Mul<Radians> for f64 {
+    type Output = Radians;
+
+    fn mul(self, rhs: Radians) -> Self::Output {
+        Radians::from(self * rhs.inner)
     }
 }
 
@@ -53,9 +94,4 @@ impl Radians {
             !self._between(t1, t0)
         }
     }
-}
-
-/// Determine four-quadrant arctan of (y/x) constrained between `0.0` and `2*PI`.
-pub fn arctan(x: f64, y: f64) -> Radians {
-    Radians(modulo_f64(y.atan2(x), RAD_2PI.0))
 }

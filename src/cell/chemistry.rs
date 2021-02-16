@@ -14,26 +14,17 @@ use crate::utils::pcg32::Pcg32;
 use crate::utils::{circ_ix_minus, circ_ix_plus};
 use crate::NVERTS;
 use rand::seq::SliceRandom;
-use rand::Rng;
 use rand_distr::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::{Debug, Display};
 
-pub enum DistributionType {
-    /// Distribute Rho GTPase randomly over all vertices.
-    Random,
-    /// Mark vertices `true` if Rho GTPase is to be placed there.
-    SpecificUniform([bool; NVERTS as usize]),
-    SpecificRandom([bool; NVERTS as usize]),
-}
+pub mod distrib_gens {
+    use crate::utils::pcg32::Pcg32;
+    use crate::NVERTS;
+    use rand::distributions::Uniform;
+    use rand::Rng;
 
-pub struct DistributionScheme {
-    pub frac: f64,
-    pub ty: DistributionType,
-}
-
-impl DistributionScheme {
     /// [1.0, 10.0, 4.0, 5.0] (consider the relative fraction of rho gtpase), sum = 20.0,,
     /// go thru each and divide by 20 = [0.05, 0.5, 0.2, 0.25]
     /// if we now sum up everything in the new array, sum = 1.0
@@ -46,7 +37,7 @@ impl DistributionScheme {
         distrib
     }
 
-    fn gen_random(
+    pub fn random(
         rng: &mut Pcg32,
         frac: f64,
     ) -> [f64; NVERTS as usize] {
@@ -56,12 +47,12 @@ impl DistributionScheme {
         r.iter_mut().for_each(|e| {
             *e = rng.sample(prob_distrib);
         });
-        Self::scaled_unitize(frac, r)
+        scaled_unitize(frac, r)
     }
 
-    fn gen_specific_uniform(
+    pub fn specific_uniform(
         frac: f64,
-        marked_verts: &[bool; NVERTS as usize],
+        marked_verts: [bool; NVERTS as usize],
     ) -> [f64; NVERTS as usize] {
         //println!("marking in gen_specific: {:?}", &marked_verts);
         let mut r = [0.0; NVERTS as usize];
@@ -72,12 +63,13 @@ impl DistributionScheme {
                 }
             },
         );
-        Self::scaled_unitize(frac, r)
+        scaled_unitize(frac, r)
     }
-    fn gen_specific_random(
+
+    pub fn specific_random(
         rng: &mut Pcg32,
         frac: f64,
-        marked_verts: &[bool; NVERTS as usize],
+        marked_verts: [bool; NVERTS as usize],
     ) -> [f64; NVERTS as usize] {
         //println!("marking in gen_specific: {:?}", &marked_verts);
         let mut r = [0.0; NVERTS as usize];
@@ -90,23 +82,10 @@ impl DistributionScheme {
                 }
             },
         );
-        Self::scaled_unitize(frac, r)
-    }
-
-    pub fn generate(&self, rng: &mut Pcg32) -> [f64; NVERTS] {
-        match &self.ty {
-            DistributionType::Random => {
-                Self::gen_random(rng, self.frac)
-            }
-            DistributionType::SpecificUniform(marks) => {
-                Self::gen_specific_uniform(self.frac, marks)
-            }
-            DistributionType::SpecificRandom(marks) => {
-                Self::gen_specific_random(rng, self.frac, marks)
-            }
-        }
+        scaled_unitize(frac, r)
     }
 }
+
 #[derive(
     Clone, Copy, Deserialize, Serialize, Default, Debug, PartialEq,
 )]
@@ -116,18 +95,16 @@ pub struct RgtpDistribution {
 }
 
 impl RgtpDistribution {
-    pub fn generate(
-        act_distrib: DistributionScheme,
-        inact_distrib: DistributionScheme,
-        rng: &mut Pcg32,
-    ) -> Result<RgtpDistribution, String> {
-        if act_distrib.frac + inact_distrib.frac > 1.0 {
-            Err("active + inactive > 1.0".to_string())
+    pub fn new(
+        active: [f64; NVERTS],
+        inactive: [f64; NVERTS],
+    ) -> RgtpDistribution {
+        if active.iter().sum::<f64>() + inactive.iter().sum::<f64>()
+            > 1.0
+        {
+            panic!("active + inactive > 1.0".to_string())
         } else {
-            Ok(RgtpDistribution {
-                active: act_distrib.generate(rng),
-                inactive: inact_distrib.generate(rng),
-            })
+            RgtpDistribution { active, inactive }
         }
     }
 }

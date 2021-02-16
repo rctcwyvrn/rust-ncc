@@ -9,7 +9,7 @@ pub mod py_compare;
 // except according to those terms.
 use crate::cell::states::Core;
 use crate::cell::Cell;
-use crate::experiments::{CellGroup, Experiment};
+use crate::experiment_setups::{CellGroup, Experiment};
 use crate::hardio::AsyncWriter;
 use crate::interactions::{
     InteractionGenerator, Interactions, RelativeRgtpActivity,

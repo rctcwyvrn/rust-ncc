@@ -27,3 +27,4 @@
 /playground/bincode_read/Cargo.lock
 /playground/cbor_read_write/Cargo.lock
 /playground/modify_derive_test/Cargo.lock
+/executor/Cargo.lock

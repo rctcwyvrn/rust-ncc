@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::cell::py_compare::{Cell, PrintOptions};
-use crate::experiments::Experiment;
+use crate::experiment_setups::Experiment;
 use crate::hardio::py_compare::Writer;
 use crate::interactions::{
     InteractionGenerator, Interactions, RelativeRgtpActivity,
