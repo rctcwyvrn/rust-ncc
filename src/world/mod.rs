@@ -9,7 +9,7 @@ pub mod py_compare;
 // except according to those terms.
 use crate::cell::states::Core;
 use crate::cell::Cell;
-use crate::experiment_setups::{CellGroup, Experiment};
+use crate::exp_setups::{CellGroup, Experiment};
 use crate::hardio::AsyncWriter;
 use crate::interactions::{
     InteractionGenerator, Interactions, RelativeRgtpActivity,
@@ -257,9 +257,19 @@ impl World {
         }
     }
 
+    pub fn save_state(&mut self) {
+        if let Some(hw) = self.writer.as_mut() {
+            if self.state.tstep % self.snap_freq == 0 {
+                hw.push(self.state.clone());
+            }
+        }
+    }
+
     pub fn simulate(&mut self, final_tpoint: f64, save_cbor: bool) {
         let num_tsteps =
             (final_tpoint / self.char_quants.time()).ceil() as u32;
+        // Save initial state.
+        self.save_state();
         while self.state.tstep < num_tsteps {
             let new_cells: Cells = self
                 .state
@@ -272,23 +282,18 @@ impl World {
                     &mut self.interaction_generator,
                 )
                 .unwrap_or_else(|e| {
-                    self.finish_saving_history(save_cbor);
+                    self.finish_saving_history(
+                        save_cbor,
+                        "panicking",
+                    );
                     panic!("tstep: {}\n{}", self.state.tstep, e);
                 });
 
             self.state.cells = new_cells;
             self.state.tstep += 1;
-            if self.state.tstep % self.snap_freq == 0
-                && self.writer.is_some()
-            {
-                if let Some(hw) = self.writer.as_mut() {
-                    if self.state.tstep % self.snap_freq == 0 {
-                        hw.push(self.state.clone());
-                    }
-                }
-            }
+            self.save_state();
         }
-        self.finish_saving_history(save_cbor);
+        self.finish_saving_history(save_cbor, "done");
     }
 
     pub fn info(&self) -> WorldInfo {
@@ -321,9 +326,13 @@ impl World {
         )
     }
 
-    pub fn finish_saving_history(&mut self, save_cbor: bool) {
+    pub fn finish_saving_history(
+        &mut self,
+        save_cbor: bool,
+        reason: &str,
+    ) {
         if let Some(hw) = self.writer.take() {
-            hw.finish(save_cbor);
+            hw.finish(save_cbor, reason);
         }
     }
 }

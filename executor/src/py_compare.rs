@@ -1,13 +1,17 @@
-use rust_ncc::{experiment_setups, world};
+use rust_ncc::{exp_setups, world};
 use std::time::Instant;
 
-fn py_compare() {
-    let exp = experiment_setups::py_compare::generate(
-        Some(3),
-        vec![1, 1],
-        false,
-        None,
-        0.0,
+#[allow(unused)]
+fn py_compare(
+    exp_ix: usize,
+    cil_mag: f64,
+    cal_mag: Option<f64>,
+    coa_mag: Option<f64>,
+    adh_scale: Option<f64>,
+    seed: Option<u64>,
+) {
+    let exp = exp_setups::py_compare::generate(
+        exp_ix, cil_mag, coa_mag, cal_mag, adh_scale, seed,
     );
     let mut w = world::py_compare::World::new(exp);
 

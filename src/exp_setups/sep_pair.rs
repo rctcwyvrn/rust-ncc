@@ -1,19 +1,18 @@
 use crate::cell::chemistry::{distrib_gens, RgtpDistribution};
-use crate::experiment_setups::markers::{BOT_HALF, TOP_HALF};
-use crate::experiment_setups::{
-    defaults, CellGroup, Experiment, GroupBBox,
-};
+use crate::exp_setups::defaults::RAW_COA_PARAMS_WITH_ZERO_MAG;
+use crate::exp_setups::markers::{BOT_HALF, TOP_HALF};
+use crate::exp_setups::{defaults, CellGroup, Experiment, GroupBBox};
 use crate::math::v2d::V2D;
 use crate::parameters::quantity::{Length, Quantity};
 use crate::parameters::{
-    CharQuantities, RawCloseBounds, RawCoaParams,
-    RawInteractionParams, RawParameters, RawPhysicalContactParams,
+    CharQuantities, RawCloseBounds, RawInteractionParams,
+    RawParameters, RawPhysicalContactParams,
 };
 use crate::utils::pcg32::Pcg32;
 use crate::NVERTS;
 use rand::SeedableRng;
 
-/// Generate the group layout to use for this experiment.
+/// Generate the group bounding box to use for this experiment.
 fn group_bbox(
     num_cells: usize,
     char_quants: &CharQuantities,
@@ -57,10 +56,10 @@ fn raw_params(
         distrib_gens::random(rng, 0.1),
     );
 
-    let mut raw_params = *defaults::RAW_PARAMS;
-    raw_params.modify_randomization(randomization);
-    raw_params.modify_init_rac(init_rac);
-    raw_params.modify_init_rho(init_rho);
+    let raw_params = defaults::RAW_PARAMS
+        .modify_randomization(randomization)
+        .modify_init_rac(init_rac)
+        .modify_init_rho(init_rho);
 
     raw_params
 }
@@ -149,9 +148,10 @@ pub fn generate(
     };
 
     let char_quants = *defaults::CHAR_QUANTS;
-    let mut raw_world_params = *defaults::RAW_WORLD_PARAMS;
+    let raw_world_params = *defaults::RAW_WORLD_PARAMS;
     raw_world_params.modify_interactions(RawInteractionParams {
-        coa: RawCoaParams::default_with_mag(coa_mag),
+        coa: coa_mag
+            .map(|mag| RAW_COA_PARAMS_WITH_ZERO_MAG.modify_mag(mag)),
         chem_attr: None,
         bdry: None,
         phys_contact: RawPhysicalContactParams {
@@ -164,7 +164,6 @@ pub fn generate(
             cil_mag: defaults::CIL_MAG,
         },
     });
-    (RawCoaParams::default_with_mag(coa_mag));
     let world_params = raw_world_params.refine(&char_quants);
     let cgs = make_cell_groups(
         &mut rng,

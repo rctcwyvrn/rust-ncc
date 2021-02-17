@@ -70,7 +70,14 @@ impl RawCloseBounds {
 }
 
 #[derive(
-    Clone, Debug, Default, Deserialize, Serialize, PartialEq, Modify,
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Modify,
 )]
 pub struct RawPhysicalContactParams {
     pub range: RawCloseBounds,
@@ -132,19 +139,6 @@ impl RawCoaParams {
             distrib_exp: 0.5f64.ln() / halfmax_dist,
         }
     }
-
-    pub fn default_with_mag(
-        coa_mag: Option<f64>,
-    ) -> Option<RawCoaParams> {
-        match coa_mag {
-            None => None,
-            Some(i) => Some(RawCoaParams {
-                los_penalty: 2.0,
-                halfmax_dist: Length(110.0).micro(),
-                mag: i,
-            }),
-        }
-    }
 }
 
 #[derive(
@@ -200,7 +194,14 @@ impl RawBdryParams {
 }
 
 #[derive(
-    Deserialize, Serialize, Clone, PartialEq, Default, Debug, Modify,
+    Deserialize,
+    Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Default,
+    Debug,
+    Modify,
 )]
 pub struct RawInteractionParams {
     pub coa: Option<RawCoaParams>,
@@ -224,7 +225,14 @@ impl RawInteractionParams {
 }
 
 #[derive(
-    Deserialize, Serialize, Clone, PartialEq, Default, Debug, Modify,
+    Deserialize,
+    Serialize,
+    Copy,
+    Clone,
+    PartialEq,
+    Default,
+    Debug,
+    Modify,
 )]
 pub struct RawWorldParameters {
     pub vertex_eta: Viscosity,
@@ -336,7 +344,7 @@ impl RawWorldParameters {
 }
 
 /// The "raw", unprocessed, parameters that are supplied by the user.
-#[derive(Modify)]
+#[derive(Clone, Copy, Modify)]
 pub struct RawParameters {
     /// Cell diameter.
     pub cell_diam: Length,

@@ -3,15 +3,43 @@ import json
 import numpy as np
 import json
 import cbor2
+import os
 
+out_dir = "B:\\rust-ncc\\output\\"
+cbor_files = [
+    f for f in os.listdir(out_dir)
+    if os.path.isfile(os.path.join(out_dir, f))
+       and os.path.splitext(f)[1] == ".cbor"
+]
+print(cbor_files)
 
-output = None
+exp_type = "sep_pair"
+cil = 60
+coa = None
+cal = None
+adh = None
+seed = "OFF"
+exp_ix = 0
 
-file_name = "../output/separated_pair_cil=60_cal=None_adh=10_coa=24_seed=9757.cbor"
+exp_file_format_str = "{}_cil={}_cal={}_coa={}_adh={}_seed={}_{}.cbor"
+
+wanted_file_name = exp_file_format_str.format(exp_type, cil, coa, cal, adh,
+                                              seed, exp_ix)
+
+found_wanted = False
+for fn in cbor_files:
+    if wanted_file_name == fn:
+        found_wanted = True
+        break
+
+if not found_wanted:
+    raise Exception("Error: could not find requested file {} in dir with "
+                    "contents: {}".format(wanted_file_name, cbor_files))
+file_path = os.path.join(out_dir, wanted_file_name)
 
 snapshots = []
-with open(file_name, mode='rb') as sf:
-    world_history = cbor2.load(sf)
+with open(file_path, mode='rb') as sf:
+    world_info = cbor2.load(sf)
     success = True
     while success:
         try:
@@ -21,11 +49,12 @@ with open(file_name, mode='rb') as sf:
 
 tsteps = [s["tstep"] for s in snapshots]
 state_recs = [s["cells"] for s in snapshots]
-frequency = world_history["snap_freq"]
+frequency = world_info["snap_freq"]
 
 
 def lookup_tstep_ix(tstep):
-    return int(np.floor(tstep/frequency))
+    return int(np.floor(tstep / frequency))
+
 
 def p2ds_to_numpy(p2ds):
     vs = []
@@ -43,6 +72,7 @@ def extract_p2ds_from_cell_states(state_key, dat_key, state_recs):
         dat_per_cell_per_tstep.append(np.array(dat_per_cell))
     return np.array(dat_per_cell_per_tstep)
 
+
 def extract_p2ds_from_interactions(dat_key, state_recs):
     dat_per_cell_per_tstep = []
     for rec in state_recs:
@@ -51,6 +81,7 @@ def extract_p2ds_from_interactions(dat_key, state_recs):
             dat_per_cell.append(p2ds_to_numpy(cell_rec[dat_key]))
         dat_per_cell_per_tstep.append(np.array(dat_per_cell))
     return np.array(dat_per_cell_per_tstep)
+
 
 def extract_scalars(state_key, dat_key, state_recs):
     dat_per_cell_per_tstep = []
@@ -62,11 +93,13 @@ def extract_scalars(state_key, dat_key, state_recs):
     return np.array(dat_per_cell_per_tstep)
 
 
-poly_per_cell_per_tstep = extract_p2ds_from_cell_states('core', 'poly', state_recs)
+poly_per_cell_per_tstep = extract_p2ds_from_cell_states('core', 'poly',
+                                                        state_recs)
 centroids_per_cell_per_tstep = np.array(
     [[np.average(poly, axis=0) for poly in poly_per_cell] for poly_per_cell in
      poly_per_cell_per_tstep])
-uivs_per_cell_per_tstep = extract_p2ds_from_cell_states('geom', 'unit_inward_vecs',
+uivs_per_cell_per_tstep = extract_p2ds_from_cell_states('geom',
+                                                        'unit_inward_vecs',
                                                         state_recs)
 uovs_per_cell_per_tstep = -1 * uivs_per_cell_per_tstep
 rac_acts_per_cell_per_tstep = extract_scalars('core', 'rac_acts', state_recs)
@@ -76,7 +109,8 @@ rho_acts_per_cell_per_tstep = extract_scalars('core', 'rho_acts', state_recs)
 rho_act_arrows_per_cell_per_tstep = 50 * rho_acts_per_cell_per_tstep[:, :, :,
                                          np.newaxis] * uivs_per_cell_per_tstep
 
-adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
+adhs_per_cell_per_tstep = 5 * extract_p2ds_from_interactions('x_adhs',
+                                                             state_recs)
 
 #
 # rho_acts_arrows_per_tstep = []
@@ -87,7 +121,9 @@ adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
 #     for (vix, x) in enumerate(rec['cells'][0]['state']['rho_acts']):
 #         rho_acts.append(x)
 #         arrow_deltas = -150 * x * uivs_per_tstep[tstep][vix]
-#         rho_acts_arrows.append([poly_per_tstep[tstep][vix][0] + uevs_per_tstep[tstep][vix][0]*0.1, poly_per_tstep[tstep][vix][1] + uevs_per_tstep[tstep][vix][0]*0.1, arrow_deltas[0], arrow_deltas[1]])
+#         rho_acts_arrows.append([poly_per_tstep[tstep][vix][0] +
+#         uevs_per_tstep[tstep][vix][0]*0.1, poly_per_tstep[tstep][vix][1] +
+#         uevs_per_tstep[tstep][vix][0]*0.1, arrow_deltas[0], arrow_deltas[1]])
 #     rho_acts_arrows_per_tstep.append(copy.deepcopy(rho_acts_arrows))
 #     rho_acts_per_tstep.append(rho_acts)
 # rho_acts_per_tstep = np.array(rho_acts_per_tstep)
@@ -98,7 +134,8 @@ adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
 #     cyto_forces = []
 #     for (vix, xy) in enumerate(rec['state'][0]['cyto_forces']):
 #         arrow_deltas = 0.05*np.array([xy['x'], xy['y']])
-#         cyto_forces.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
+#         cyto_forces.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[
+#         tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
 #     cyto_forces_per_tstep.append(copy.deepcopy(cyto_forces))
 # cyto_forces_per_tstep = np.array(cyto_forces_per_tstep)
 #
@@ -108,7 +145,8 @@ adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
 #     for vix in range(16):
 #         xy = rec['state'][0]['edge_forces'][vix]
 #         arrow_deltas = 0.1*np.array([xy['x'], xy['y']])
-#         efs_plus.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
+#         efs_plus.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[
+#         tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
 #     edge_forces_plus_per_tstep.append(copy.deepcopy(efs_plus))
 # edge_forces_plus_per_tstep = np.array(edge_forces_plus_per_tstep)
 #
@@ -118,11 +156,14 @@ adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
 #     for vix in range(16):
 #         xy = rec['state'][0]['edge_forces'][(vix - 1)%16]
 #         arrow_deltas = -0.1*np.array([xy['x'], xy['y']])
-#         efs_minus.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
+#         efs_minus.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[
+#         tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
 #     edge_forces_minus_per_tstep.append(copy.deepcopy(efs_minus))
 # edge_forces_minus_per_tstep = np.array(edge_forces_minus_per_tstep)
 #
-# edge_forces_per_tstep = np.append(poly_per_tstep, edge_forces_plus_per_tstep[:,:,2:4] - edge_forces_minus_per_tstep[:,:,2:4], axis=2)
+# edge_forces_per_tstep = np.append(poly_per_tstep,
+# edge_forces_plus_per_tstep[:,:,2:4] - edge_forces_minus_per_tstep[:,:,2:4],
+# axis=2)
 #
 # edge_strains_per_tstep = []
 # for tstep, rec in enumerate(mech_recs):
@@ -137,7 +178,8 @@ adhs_per_cell_per_tstep = 5*extract_p2ds_from_interactions('x_adhs', state_recs)
 #     rgtp_forces = []
 #     for (vix, xy) in enumerate(rec['state'][0]['rgtp_forces']):
 #         arrow_deltas = 0.05*np.array([xy['x'], xy['y']])
-#         rgtp_forces.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
+#         rgtp_forces.append([poly_per_tstep[tstep][vix][0], poly_per_tstep[
+#         tstep][vix][1], arrow_deltas[0], arrow_deltas[1]])
 #     rgtp_forces_per_tstep.append(copy.deepcopy(rgtp_forces))
 # rgtp_forces_per_tstep = np.array(rgtp_forces_per_tstep)
 
@@ -173,42 +215,53 @@ def paint(delta):
             rac_act_arrows_per_cell_per_tstep[tstep_ix]
     ):
         for p, rac_arrow in zip(poly, rac_act_arrows):
-            ax.arrow(p[0], p[1], 1*rac_arrow[0], 1*rac_arrow[1], color="b",
+            ax.arrow(p[0], p[1], 1 * rac_arrow[0], 1 * rac_arrow[1], color="b",
                      length_includes_head=True, head_width=0.0)
 
     for poly, rho_act_arrows in zip(poly_per_cell_per_tstep[tstep_ix],
-                                    rho_act_arrows_per_cell_per_tstep[tstep_ix]):
+                                    rho_act_arrows_per_cell_per_tstep[
+                                        tstep_ix]):
         for p, rho_arrow in zip(poly, rho_act_arrows):
-            ax.arrow(p[0], p[1], 1*rho_arrow[0], 1*rho_arrow[1], color="r",
+            ax.arrow(p[0], p[1], 1 * rho_arrow[0], 1 * rho_arrow[1], color="r",
                      length_includes_head=True, head_width=0.0)
 
-    for poly_ix, poly, adhs in zip(np.arange(0, len(poly_per_cell_per_tstep[0])), poly_per_cell_per_tstep[tstep_ix], adhs_per_cell_per_tstep[tstep_ix]):
+    for poly_ix, poly, adhs in zip(
+            np.arange(0, len(poly_per_cell_per_tstep[0])),
+            poly_per_cell_per_tstep[tstep_ix],
+            adhs_per_cell_per_tstep[tstep_ix]):
         if poly_ix == 0:
             adh_arrow_color = "magenta"
         else:
             adh_arrow_color = "cyan"
         for p, adh in zip(poly, adhs):
             ax.arrow(p[0], p[1], adh[0], adh[1], color=adh_arrow_color,
-             length_includes_head=True, head_width=1.0)
+                     length_includes_head=True, head_width=1.0)
 
     # for rac_act in rac_acts_arrows_per_tstep[tstep]:
-    #     ax.arrow(rac_act[0], rac_act[1], rac_act[2], rac_act[3], color="b", length_includes_head=True, head_width=0.0)
+    #     ax.arrow(rac_act[0], rac_act[1], rac_act[2], rac_act[3], color="b",
+    #     length_includes_head=True, head_width=0.0)
     # for rho_act in rho_acts_arrows_per_tstep[tstep]:
-    #     ax.arrow(rho_act[0], rho_act[1], rho_act[2], rho_act[3], color="r", length_includes_head=True, head_width=0.0)
+    #     ax.arrow(rho_act[0], rho_act[1], rho_act[2], rho_act[3], color="r",
+    #     length_includes_head=True, head_width=0.0)
     # for cyto_force in cyto_forces_per_tstep[tstep]:
-    #     ax.arrow(cyto_force[0], cyto_force[1], cyto_force[2], cyto_force[3], color="cyan", length_includes_head=True, head_width=0.5)
+    #     ax.arrow(cyto_force[0], cyto_force[1], cyto_force[2], cyto_force[
+    #     3], color="cyan", length_includes_head=True, head_width=0.5)
     # for i, ef_plus in enumerate(edge_forces_plus_per_tstep[tstep]):
     #     if True:
     #         ax.plot([ef_plus[0]], [ef_plus[1]], marker='o', color='b')
-    #         ax.arrow(ef_plus[0], ef_plus[1], ef_plus[2], ef_plus[3], color="b", length_includes_head=True, head_width=0.5)
+    #         ax.arrow(ef_plus[0], ef_plus[1], ef_plus[2], ef_plus[3],
+    #         color="b", length_includes_head=True, head_width=0.5)
     # for i, ef_minus in enumerate(edge_forces_minus_per_tstep[tstep]):
     #     if True:
     #         ax.plot([ef_minus[0]], [ef_minus[1]], marker='o', color='r')
-    #         ax.arrow(ef_minus[0], ef_minus[1], ef_minus[2], ef_minus[3], color="r", length_includes_head=True, head_width=0.5)
+    #         ax.arrow(ef_minus[0], ef_minus[1], ef_minus[2], ef_minus[3],
+    #         color="r", length_includes_head=True, head_width=0.5)
     # for edge_force in edge_forces_per_tstep[tstep]:
-    #     ax.arrow(edge_force[0], edge_force[1], edge_force[2], edge_force[3], color="g", length_includes_head=True, head_width=0.5)
+    #     ax.arrow(edge_force[0], edge_force[1], edge_force[2], edge_force[
+    #     3], color="g", length_includes_head=True, head_width=0.5)
     # for rgtp_force in rgtp_forces_per_tstep[tstep]:
-    #     ax.arrow(rgtp_force[0], rgtp_force[1], rgtp_force[2], rgtp_force[3], color="b", length_includes_head=True, head_width=0.5)
+    #     ax.arrow(rgtp_force[0], rgtp_force[1], rgtp_force[2], rgtp_force[
+    #     3], color="b", length_includes_head=True, head_width=0.5)
     ax.set_title("frame {}".format(tsteps[tstep_ix]))
     tstep_ix = (tstep_ix + delta) % len(tsteps)
     plt.show()

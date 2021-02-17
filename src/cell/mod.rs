@@ -120,10 +120,10 @@ impl Cell {
             rtol: 1e-3,
             init_h_factor: Some(0.1),
         };
-        let result = rkdp5::integrator(
+        let mut result = rkdp5::integrator(
             1.0,
             Core::derivative,
-            &self.core,
+            self.core,
             &self.rac_rand,
             interactions,
             world_parameters,
@@ -131,20 +131,27 @@ impl Cell {
             aux_args,
         );
 
-        let mut state =
-            result.y.expect("rkdp5 integrator: too many iterations!");
-        state
-            .enforce_volume_exclusion(&self.core.poly, &contact_data)
-            .map_err(|e| format!("ci={}\n{}", self.ix, e))?;
+        match &mut result.state {
+            Ok(cs) => {
+                cs.enforce_volume_exclusion(
+                    &self.core.poly,
+                    &contact_data,
+                )
+                .map_err(|e| format!("ci={}\n{}", self.ix, e))?;
 
-        #[cfg(feature = "validate")]
-        state.validate("rkdp5")?;
+                #[cfg(feature = "validate")]
+                cs.validate("rkdp5")?;
 
-        Ok(Cell {
-            ix: self.ix,
-            group_ix: self.group_ix,
-            core: state,
-            rac_rand: self.rac_rand.update(tstep, rng, parameters),
-        })
+                Ok(Cell {
+                    ix: self.ix,
+                    group_ix: self.group_ix,
+                    core: *cs,
+                    rac_rand: self
+                        .rac_rand
+                        .update(tstep, rng, parameters),
+                })
+            }
+            Err(err) => Err(format!("{} ({:?})", err, aux_args)),
+        }
     }
 }

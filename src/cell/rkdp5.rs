@@ -59,6 +59,7 @@ const INV_QP1: f64 = 1.0 / 5.0; // inverse (max of p and p_hat) + 1, see explana
 const FAC: f64 = 0.8; // safety factor, approximately 0.38^QP1, see explanation for equation 4.12 in HWN vol1
 const FAC_MAX: f64 = (5.0 - 1.5) / 2.0; // see explanation for equation 4.12 in HWN vol1
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct AuxArgs {
     pub max_iters: u32,
     pub atol: f64,
@@ -67,7 +68,7 @@ pub struct AuxArgs {
 }
 
 pub struct Solution {
-    pub y: Result<Core, String>,
+    pub state: Result<Core, String>,
     pub num_rejections: u32,
     pub num_iters: u32,
 }
@@ -201,15 +202,13 @@ impl Ks {
 pub fn integrator(
     mut dt: f64,
     f: CellDynamicsFn,
-    init_state: &Core,
+    mut init_state: Core,
     rand_state: &RacRandState,
     interactions: &Interactions,
     world_parameters: &WorldParameters,
     parameters: &Parameters,
     aux_args: AuxArgs,
 ) -> Solution {
-    let mut y0 = *init_state;
-
     let AuxArgs {
         max_iters,
         atol,
@@ -240,14 +239,14 @@ pub fn integrator(
         } = Ks::calc(
             f,
             h,
-            y0,
+            init_state,
             rand_state,
             interactions,
             world_parameters,
             parameters,
         );
 
-        let y1 = y0
+        let next_state = init_state
             + B[0] * k0.time_step(h)
             + B[1] * k1.time_step(h)
             + B[2] * k2.time_step(h)
@@ -259,13 +258,13 @@ pub fn integrator(
         if last_iter {
             assert!((h - dt).abs() < f64::EPSILON);
             return Solution {
-                y: Ok(y1),
+                state: Ok(next_state),
                 num_rejections,
                 num_iters,
             };
         }
 
-        let y1_hat = y0
+        let next_state_hat = init_state
             + h * (k0.time_step(B_HAT[0])
                 + k1.time_step(B_HAT[1])
                 + k2.time_step(B_HAT[2])
@@ -275,15 +274,18 @@ pub fn integrator(
                 + k6.time_step(B_HAT[6]));
 
         // Equations 4.10, 4.11, Hairer,Wanner&Norsett Solving ODEs Vol. 1
-        let sc = rtol * y0.abs().max(&y1.abs()) + atol;
-        let error = ((y1 - y1_hat).square() / sc).flat_avg().sqrt();
+        let sc =
+            rtol * init_state.abs().max(&next_state.abs()) + atol;
+        let error = ((next_state - next_state_hat).square() / sc)
+            .flat_avg()
+            .sqrt();
         let mut h_new =
             h * min_f64(fac_max, FAC * (1.0 / error).powf(INV_QP1));
 
         // see explanation for equation 4.13 in HNW vol1
         if error <= 1.0 {
             fac_max = FAC_MAX;
-            y0 = y1;
+            init_state = next_state;
             if h + h_new > dt {
                 h_new = dt - h;
                 last_iter = true;
@@ -300,8 +302,8 @@ pub fn integrator(
     }
 
     Solution {
+        state: Err("Too many iterations!".to_string()),
         num_rejections,
         num_iters,
-        y: Err("Too many iterations!".to_string()),
     }
 }

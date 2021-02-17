@@ -106,6 +106,7 @@ pub struct AsyncWriter {
     max_capacity: usize,
     thread_handle: JoinHandle<()>,
     pub file_path: PathBuf,
+    num_saved: usize,
 }
 
 impl AsyncWriter {
@@ -158,6 +159,7 @@ impl AsyncWriter {
             max_capacity,
             thread_handle,
             file_path: path,
+            num_saved: 0,
         }
     }
 
@@ -169,10 +171,14 @@ impl AsyncWriter {
     }
 
     pub fn drain(&mut self) {
-        self.sender.send(self.buf.drain(..).collect()).unwrap();
+        let num_sent = self.buf.len();
+        if let Ok(()) = self.sender.send(self.buf.drain(..).collect())
+        {
+            self.num_saved += num_sent;
+        }
     }
 
-    pub fn finish(mut self, save_cbor: bool) {
+    pub fn finish(mut self, save_cbor: bool, reason: &str) {
         self.drain();
         let Self {
             sender,
@@ -189,6 +195,10 @@ impl AsyncWriter {
                 .join(get_file_name(Format::Cbor, &file_name));
             save_binc_to_cbor(&file_path, &cbor_path);
         }
+        println!(
+            "Finishing. Reason: {}. Saved {} snapshots to disk.",
+            reason, self.num_saved
+        );
     }
 }
 

@@ -7,37 +7,10 @@ use crate::parameters::{
 };
 use crate::utils::pcg32::Pcg32;
 
-use crate::cell::chemistry::{
-    DistributionScheme, DistributionType, RgtpDistribution,
-};
-use crate::experiment_setups::{CellGroup, Experiment, GroupBBox};
+use crate::cell::chemistry::RgtpDistribution;
+use crate::exp_setups::{CellGroup, Experiment, GroupBBox};
 use crate::NVERTS;
 use rand::SeedableRng;
-
-/// Generate the group layout to use for this experiment.
-fn group_layout(
-    group_ix: usize,
-    char_quants: &CharQuantities,
-) -> Result<GroupBBox, String> {
-    // specify initial location of group centroid
-    let centroid = V2D {
-        x: char_quants
-            .normalize(&Length((group_ix as f64) * 40.0).micro().g()),
-        y: char_quants.normalize(&Length(0.0)),
-    };
-    let r = GroupBBox {
-        width: 1,
-        height: 1,
-        bottom_left: centroid,
-    };
-    if r.width * r.height < 1 {
-        Err(String::from(
-            "Group layout area is too small to contain required number of cells.",
-        ))
-    } else {
-        Ok(r)
-    }
-}
 
 fn gen_raw_params(
     group_ix: usize,

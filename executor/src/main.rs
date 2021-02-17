@@ -1,102 +1,92 @@
 mod py_compare;
 
-use clap::{App, Arg, ArgMatches, SubCommand};
-use rust_ncc::experiment_setups::ExperimentType;
-use rust_ncc::{experiment_setups, world, DEFAULT_OUTPUT_DIR};
+use clap::{App, Arg, ArgMatches};
+use rust_ncc::exp_setups::ExperimentType;
+use rust_ncc::{exp_setups, world, DEFAULT_OUTPUT_DIR};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 
-pub const EXP_CHOICES: [&str; 2] = ["sep-pair", "py-comp"];
+pub const SEP_PAIR: &str = "sep-pair";
+pub const PY_COMP: &str = "py-comp";
+pub const EXP_CHOICES: [&str; 2] = [SEP_PAIR, PY_COMP];
 
 fn main() {
     let parsed_args = App::new("rust-ncc executor")
         .version("0.1")
         .about("Execute rust-ncc simulations from the command line.")
         .arg(
-            Arg::with_name("exp-setup")
-                .short("es")
-                .long("exp-setup")
+            Arg::with_name("etype")
+                .long("etype")
                 .help(&format!(
                     "Choose type of experiment to run. Choices are:\
                  {:?}",
                     EXP_CHOICES
-                ))
-                .required(true),
+                )).takes_value(true).required(true),
         )
         .arg(
             Arg::with_name("sep-pair-params")
-                .long("sep-pair-params")
-                .short("spp")
+                .long("spp")
                 .help("Separated pair parameters: sep_dist_in_cell_diams")
-                .required_if("exp-setup", "sep-pair"),
+                .required_if("etype", SEP_PAIR).takes_value(true),
         )
         .arg(
             Arg::with_name("cil")
                 .long("cil")
-                .short("cil")
-                .help(&format!(
-                    "Magnitude of CIL signal."
-                ))
-                .required(true)
+                .help(&"Magnitude of CIL signal.".to_string())
+                .required(true).takes_value(true)
         )
         .arg(
             Arg::with_name("coa")
                 .long("coa")
-                .short("coa")
-                .help(&format!(
-                    "Magnitude of COA signal."
-                ))
+                .help(&"Magnitude of COA signal.".to_string()).takes_value(true)
         )
         .arg(
             Arg::with_name("cal")
                 .long("cal")
-                .short("cal")
-                .help(&format!(
-                    "Magnitude of CAL signal."
-                ))
+                .help(&"Magnitude of CAL signal.".to_string()).takes_value(true)
         )
         .arg(
             Arg::with_name("adh")
                 .long("adh")
-                .short("adh")
-                .help(&format!(
-                    "Magnitude of adhesion."
-                ))
+                .help(&"Magnitude of adhesion.".to_string()).takes_value(true)
         )
         .arg(
             Arg::with_name("seeds")
-                .short("s")
                 .long("seeds")
-                .help(&format!(
-                    "Choose type of experiment to run. Choices are:\
-                 {:?}",
-                    EXP_CHOICES
-                ))
                 .required(true)
-                .multiple(true)
+                .multiple(true).takes_value(true)
         )
         .get_matches();
 
-    let exp_type_val = parsed_args.value_of("exp-setup").unwrap();
+    let exp_type_val = parsed_args.value_of("etype").unwrap();
     let exp_type = match exp_type_val {
-        "sep-pair" => ExperimentType::SeparatedPair {
+        SEP_PAIR => ExperimentType::SeparatedPair {
             sep_in_cell_diams: parsed_args
-                .values_of("sep-pair-params")
+                .value_of("sep-pair-params")
                 .unwrap()
                 .parse::<usize>()
                 .unwrap(),
         },
-        "py-compare" => ExperimentType::PythonComparison,
+        PY_COMP => ExperimentType::PythonComparison,
         _ => panic!("Unknown experiment given: {}", exp_type_val),
     };
-    let (cil, coa, cal, adh, seeds) =
-        handle_general_args(&parsed_args);
+    let exp_args = refine_experiment_args(&parsed_args);
 
-    for (ix, &seed) in seeds.iter().enumerate() {
-        let exp = experiment_setups::generate(
-            ix, cil, cal, coa, adh, seed, exp_type,
+    for &exp_args in exp_args.iter() {
+        let ExperimentArgs {
+            ix,
+            cil,
+            coa,
+            cal,
+            adh,
+            seed,
+        } = exp_args;
+        let exp = exp_setups::generate(
+            ix, cil, coa, cal, adh, seed, exp_type,
         );
+
+        let file_name = exp.file_name.clone();
 
         let mut w = world::World::new(
             exp,
@@ -113,13 +103,23 @@ fn main() {
             now.elapsed().as_secs()
         );
 
-        generate_animation(&exp.file_name)
+        generate_animation(&file_name)
     }
 }
 
-fn handle_general_args(
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub struct ExperimentArgs {
+    ix: usize,
+    cil: f64,
+    coa: Option<f64>,
+    cal: Option<f64>,
+    adh: Option<f64>,
+    seed: Option<u64>,
+}
+
+fn refine_experiment_args(
     parsed_args: &ArgMatches,
-) -> (f64, Option<f64>, Option<f64>, Option<f64>, Vec<Option<u64>>) {
+) -> Vec<ExperimentArgs> {
     let cil =
         parsed_args.value_of("cil").unwrap().parse::<f64>().unwrap();
 
@@ -145,22 +145,31 @@ fn handle_general_args(
         seeds
     };
 
-    (cil, coa, cal, adh, seeds)
+    seeds
+        .iter()
+        .enumerate()
+        .map(|(ix, &seed)| ExperimentArgs {
+            ix,
+            cil,
+            coa,
+            cal,
+            adh,
+            seed,
+        })
+        .collect::<Vec<ExperimentArgs>>()
 }
 
 fn generate_animation(file_name: &str) {
-    let file_path = PathBuf::from(format!(
+    let _file_path = PathBuf::from(format!(
         "{}/{}.cbor",
         DEFAULT_OUTPUT_DIR, file_name
     ));
 
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
-            .args(&["/C", "echo hello"])
+            .args(&["/K", "echo hello"])
             .output()
-            .expect("failed to execute process");
-
-        Command::new()
+            .expect("failed to execute process")
     } else {
         Command::new("sh")
             .arg("-c")
@@ -168,4 +177,5 @@ fn generate_animation(file_name: &str) {
             .output()
             .expect("failed to execute process")
     };
+    println!("{:?}", output);
 }

@@ -1,11 +1,12 @@
 use crate::cell::chemistry::{distrib_gens, RgtpDistribution};
-use crate::experiment_setups::markers::ALL;
+use crate::exp_setups::markers::ALL;
 use crate::parameters::quantity::{
     Force, General, Length, Quantity, Stress, Time, Tinv, Viscosity,
 };
 use crate::parameters::{
-    CharQuantities, RawCloseBounds, RawInteractionParams,
-    RawParameters, RawPhysicalContactParams, RawWorldParameters,
+    CharQuantities, RawCloseBounds, RawCoaParams,
+    RawInteractionParams, RawParameters, RawPhysicalContactParams,
+    RawWorldParameters,
 };
 use crate::NVERTS;
 use once_cell::sync::Lazy;
@@ -60,8 +61,8 @@ pub static RAW_PARAMS: Lazy<RawParameters> = Lazy::new(|| {
     .to_diffusion()
     .unwrap();
     let init_rac = RgtpDistribution::new(
-        distrib_gens::specific_uniform(0.1, &ALL),
-        distrib_gens::specific_uniform(0.1, &ALL),
+        distrib_gens::specific_uniform(0.1, ALL),
+        distrib_gens::specific_uniform(0.1, ALL),
     );
     RawParameters {
         cell_diam: *CELL_DIAMETER,
@@ -106,6 +107,17 @@ pub static PHYS_CLOSE_DIST: Lazy<Length> =
     Lazy::new(|| Length(0.5).micro());
 
 pub const CIL_MAG: f64 = 60.0;
+
+pub const COA_LOS_PENALTY: f64 = 2.0;
+pub static COA_HALFMAX_DIST: Lazy<Length> =
+    Lazy::new(|| Length(110.0).micro());
+
+pub static RAW_COA_PARAMS_WITH_ZERO_MAG: Lazy<RawCoaParams> =
+    Lazy::new(|| RawCoaParams {
+        los_penalty: COA_LOS_PENALTY,
+        halfmax_dist: *COA_HALFMAX_DIST,
+        mag: 0.0,
+    });
 
 pub static RAW_WORLD_PARAMS: Lazy<RawWorldParameters> =
     Lazy::new(|| {

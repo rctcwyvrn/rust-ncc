@@ -21,3 +21,12 @@ pub static TOP_HALF: Lazy<[bool; NVERTS]> =
 pub static BOT_HALF: Lazy<[bool; NVERTS]> =
     Lazy::new(|| mark_between_angles((0.5 * RAD_2PI, RAD_2PI)));
 pub const ALL: [bool; NVERTS] = [true; NVERTS];
+
+#[macro_export]
+macro_rules! mark_verts {
+    ( $( $x:literal ),* ) => {{
+        let mut marks = [false; NVERTS];
+        $(marks[$x] = true;)*
+        marks
+    }};
+}
