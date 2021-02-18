@@ -31,10 +31,10 @@ once_cell = "1.5.2"
 #harness = false
 #path = "src/benches/lseg_poly_intersect.rs"
 
-[[bench]]
-name = "n_cells"
-harness = false
-path = "src/benches/n_cells.rs"
+# [[bench]]
+# name = "n_cells"
+# harness = false
+# path = "src/benches/n_cells.rs"
 
 [features]
 validate = []
