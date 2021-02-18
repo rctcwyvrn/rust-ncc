@@ -57,6 +57,11 @@ fn main() {
                 .required(true)
                 .multiple(true).takes_value(true)
         )
+        .arg(
+            Arg::with_name("path")
+            .long("p")
+            .help(&"Output directory".to_string()).takes_value(true)
+        )
         .get_matches();
 
     let exp_type_val = parsed_args.value_of("etype").unwrap();
@@ -81,16 +86,22 @@ fn main() {
             cal,
             adh,
             seed,
+            path,
         } = exp_args;
         let exp = exp_setups::generate(
             ix, cil, coa, cal, adh, seed, exp_type,
         );
 
+        let path = match path {
+            Some(p) => p,
+            None => DEFAULT_OUTPUT_DIR
+        };
+
         let file_name = exp.file_name.clone();
 
         let mut w = world::World::new(
             exp,
-            Some(PathBuf::from(DEFAULT_OUTPUT_DIR)),
+            Some(PathBuf::from(path)),
             10,
             1000,
         );
@@ -108,18 +119,19 @@ fn main() {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
-pub struct ExperimentArgs {
+pub struct ExperimentArgs<'a> {
     ix: usize,
     cil: f64,
     coa: Option<f64>,
     cal: Option<f64>,
     adh: Option<f64>,
     seed: Option<u64>,
+    path: Option<&'a str>,
 }
 
-fn refine_experiment_args(
-    parsed_args: &ArgMatches,
-) -> Vec<ExperimentArgs> {
+fn refine_experiment_args<'a>(
+    parsed_args: &'a ArgMatches,
+) -> Vec<ExperimentArgs<'a>> {
     let cil =
         parsed_args.value_of("cil").unwrap().parse::<f64>().unwrap();
 
@@ -145,6 +157,8 @@ fn refine_experiment_args(
         seeds
     };
 
+    let path = parsed_args.value_of("path");
+
     seeds
         .iter()
         .enumerate()
@@ -155,6 +169,7 @@ fn refine_experiment_args(
             cal,
             adh,
             seed,
+            path,
         })
         .collect::<Vec<ExperimentArgs>>()
 }
